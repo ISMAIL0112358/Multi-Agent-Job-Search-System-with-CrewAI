@@ -38,6 +38,8 @@ export default function ChatWindow({ conversationId }) {
         .find(m => m.metadata_?.type === 'job_results');
       if (jobMsg?.metadata_?.jobs) {
         setJobs(jobMsg.metadata_.jobs);
+      } else {
+        setJobs([]);
       }
     } catch (err) {
       console.error('Failed to load conversation:', err);

@@ -40,27 +40,26 @@ def search_jobs(
 
     # Fetch jobs from USAJobs
     raw_jobs = fetch_usajobs(body.keyword, body.location, body.results_per_page)
-    if not raw_jobs:
-        return JobSearchResponse(jobs=[], total=0)
 
-    # Parse and score each job
+    # Parse and score each job if results exist
     results = []
-    for item in raw_jobs:
-        parsed = parse_job_item(item)
+    if raw_jobs:
+        for item in raw_jobs:
+            parsed = parse_job_item(item)
 
-        # Run hiring score agent
-        try:
-            score_result = run_hiring_score(parsed["job_summary"], convo.resume_text)
-            parsed["hiring_score"] = score_result["score"]
-            parsed["hiring_score_reasoning"] = score_result["reasoning"]
-        except Exception:
-            parsed["hiring_score"] = None
-            parsed["hiring_score_reasoning"] = "Score unavailable"
+            # Run hiring score agent
+            try:
+                score_result = run_hiring_score(parsed["job_summary"], convo.resume_text)
+                parsed["hiring_score"] = score_result["score"]
+                parsed["hiring_score_reasoning"] = score_result["reasoning"]
+            except Exception:
+                parsed["hiring_score"] = None
+                parsed["hiring_score_reasoning"] = "Score unavailable"
 
-        results.append(JobResult(**parsed))
+            results.append(JobResult(**parsed))
 
-    # Sort by hiring score (highest first)
-    results.sort(key=lambda j: j.hiring_score or 0, reverse=True)
+        # Sort by hiring score (highest first)
+        results.sort(key=lambda j: j.hiring_score or 0, reverse=True)
 
     # Save search as a user message + results as assistant message
     user_msg = Message(
