@@ -12,6 +12,7 @@ export default function ChatWindow({ conversationId }) {
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
+  const [companyPreference, setCompanyPreference] = useState('');
   const [searching, setSearching] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
@@ -62,6 +63,7 @@ export default function ChatWindow({ conversationId }) {
       const res = await client.post(`/conversations/${conversationId}/search-jobs`, {
         keyword: keyword.trim(),
         location: location.trim() || 'remote',
+        company_preference: companyPreference.trim() || undefined,
         results_per_page: 5,
       });
       setJobs(res.data.jobs);
@@ -162,6 +164,14 @@ export default function ChatWindow({ conversationId }) {
                 onChange={e => setLocation(e.target.value)}
                 id="job-location-input"
               />
+              <input
+                type="text"
+                className="input"
+                placeholder="Ideal Company (e.g. startup, remote, fintech)"
+                value={companyPreference}
+                onChange={e => setCompanyPreference(e.target.value)}
+                id="company-preference-input"
+              />
             </div>
             <button
               type="submit"
@@ -221,6 +231,7 @@ export default function ChatWindow({ conversationId }) {
         <JobDetailPanel
           job={selectedJob}
           conversationId={conversationId}
+          messages={conversation?.messages || []}
           onClose={() => setSelectedJob(null)}
         />
       )}

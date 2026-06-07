@@ -4,7 +4,7 @@ from backend.config import settings
 
 def _get_llm():
     return LLM(
-        model="gemini/gemini-3.5-flash",
+        model=settings.GEMINI_MODEL_NAME,
         temperature=0.5,
         api_key=settings.GEMINI_API_KEY,
     )

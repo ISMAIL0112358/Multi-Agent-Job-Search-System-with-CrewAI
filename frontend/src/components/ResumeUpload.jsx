@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import client from '../api/client';
 import './ResumeUpload.css';
@@ -6,6 +6,15 @@ import './ResumeUpload.css';
 export default function ResumeUpload({ conversationId, onUploadComplete }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
+  const [availableResumes, setAvailableResumes] = useState([]);
+  const [loadingResumes, setLoadingResumes] = useState(true);
+
+  useEffect(() => {
+    client.get('/user-resumes')
+      .then(res => setAvailableResumes(res.data))
+      .catch(err => console.error('Failed to load resumes:', err))
+      .finally(() => setLoadingResumes(false));
+  }, []);
 
   const onDrop = useCallback(async (acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -31,6 +40,19 @@ export default function ResumeUpload({ conversationId, onUploadComplete }) {
     }
   }, [conversationId, onUploadComplete]);
 
+  const handleSelectResume = async (filename) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const res = await client.post(`/conversations/${conversationId}/resume/select`, { filename });
+      onUploadComplete(res.data);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to select resume');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'application/pdf': ['.pdf'] },
@@ -40,10 +62,12 @@ export default function ResumeUpload({ conversationId, onUploadComplete }) {
 
   return (
     <div className="resume-upload-wrapper animate-fade-in" id="resume-upload">
-      <div
-        {...getRootProps()}
-        className={`resume-dropzone ${isDragActive ? 'dragging' : ''} ${uploading ? 'uploading' : ''}`}
-      >
+      <div className="resume-options-container">
+        {/* Upload New Resume */}
+        <div
+          {...getRootProps()}
+          className={`resume-dropzone ${isDragActive ? 'dragging' : ''} ${uploading ? 'uploading' : ''}`}
+        >
         <input {...getInputProps()} />
         {uploading ? (
           <div className="resume-upload-status">
@@ -69,6 +93,28 @@ export default function ResumeUpload({ conversationId, onUploadComplete }) {
             <span className="resume-upload-hint">or click to browse files</span>
           </>
         )}
+      </div>
+
+      {availableResumes.length > 0 && !uploading && (
+        <div className="resume-select-existing">
+          <p className="resume-select-title">Or select a previously uploaded resume:</p>
+          <div className="resume-list">
+            {availableResumes.map((doc, idx) => (
+              <button 
+                key={idx} 
+                className="btn btn-secondary resume-select-btn"
+                onClick={() => handleSelectResume(doc.filename)}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                {doc.filename}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       </div>
       {error && (
         <div className="resume-upload-error">

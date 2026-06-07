@@ -9,10 +9,17 @@ class UserResponse(BaseModel):
     email: str
     name: str
     picture_url: Optional[str] = None
+    skills: Optional[str] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+class UserUpdate(BaseModel):
+    """Request body for updating user profile."""
+    name: Optional[str] = None
+    picture_url: Optional[str] = None
+    skills: Optional[str] = None
 
 
 class GoogleAuthRequest(BaseModel):
