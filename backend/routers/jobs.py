@@ -9,7 +9,7 @@ from backend.deps import get_current_user
 from backend.models.user import User
 from backend.models.conversation import Conversation, Message
 from backend.schemas.job import JobSearchRequest, JobSearchResponse, JobResult
-from backend.services.job_service import fetch_usajobs, parse_job_item
+from backend.services.job_service import fetch_linkedin_jobs, parse_job_item
 from backend.services.agent_service import run_hiring_score
 
 router = APIRouter(prefix="/conversations", tags=["Jobs"])
@@ -38,8 +38,8 @@ def search_jobs(
             detail="Please upload a resume first before searching for jobs.",
         )
 
-    # Fetch jobs from USAJobs
-    raw_jobs = fetch_usajobs(body.keyword, body.location, body.results_per_page)
+    # Fetch jobs from LinkedIn
+    raw_jobs = fetch_linkedin_jobs(body.keyword, body.location, body.results_per_page)
 
     # Parse and score each job if results exist
     results = []

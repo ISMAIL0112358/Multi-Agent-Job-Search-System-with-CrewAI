@@ -11,3 +11,4 @@ PyMuPDF
 agentops
 httpx
 pydantic-settings
+beautifulsoup4
