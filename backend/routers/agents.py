@@ -40,7 +40,7 @@ def analyze_job(
 
     # Run the full analysis pipeline
     try:
-        result = run_full_analysis(body.job_data, convo.resume_text, body.user_bio)
+        result = run_full_analysis(body.job_data, convo.resume_text, body.user_bio, current_user.skills)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -64,6 +64,8 @@ def analyze_job(
             "jd_summary": result["jd_summary"],
             "resume_tweaks": result["resume_tweaks"],
             "cover_letter": result["cover_letter"],
+            "company_profile": result["company_profile"],
+            "interview_prep": result["interview_prep"],
             "hiring_score": result["hiring_score"],
             "hiring_score_reasoning": result["hiring_score_reasoning"],
         }),
@@ -78,3 +80,85 @@ def analyze_job(
     db.commit()
 
     return JobAnalysisResponse(**result)
+
+
+from backend.schemas.chat import ChatRequest, ChatResponse
+from langchain_google_genai import ChatGoogleGenerativeAI
+from backend.config import settings
+
+@router.post("/{conversation_id}/chat", response_model=ChatResponse)
+def chat_followup(
+    conversation_id: str,
+    body: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Answer a follow-up question based on the job context."""
+    # Validate conversation
+    convo = (
+        db.query(Conversation)
+        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
+        .first()
+    )
+    if not convo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+    # Use LangChain to query the model directly
+    try:
+        # Check if the model name is set correctly, some Langchain versions require google/ prefix, some do not
+        # We will use the model name from settings but strip any "gemini/" prefix if present as Langchain handles it
+        model_name = settings.GEMINI_MODEL_NAME.replace("gemini/", "") if settings.GEMINI_MODEL_NAME.startswith("gemini/") else settings.GEMINI_MODEL_NAME
+        
+        llm = ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=settings.GEMINI_API_KEY,
+            temperature=0.3,
+        )
+        
+        from langchain.schema import HumanMessage, SystemMessage
+        
+        system_prompt = f"""
+        You are a helpful career advisor assisting a user with a job application.
+        The user has analyzed a job posting. Here is the context of the job analysis:
+        
+        Job Title: {body.job_context.get('position_title', 'Unknown')}
+        Organization: {body.job_context.get('organization_name', 'Unknown')}
+        Job Summary: {body.job_context.get('job_summary', 'Unknown')}
+        
+        Please answer the user's follow-up question based on this context. Be concise and professional.
+        """
+        
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=body.message)
+        ]
+        
+        response = llm.invoke(messages)
+        
+        # Save as conversation messages
+        user_msg = Message(
+            conversation_id=conversation_id,
+            role="user",
+            content=body.message,
+            metadata_={"type": "followup_question"}
+        )
+        assistant_msg = Message(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=response.content,
+            metadata_={"type": "followup_answer"}
+        )
+        db.add(user_msg)
+        db.add(assistant_msg)
+        
+        convo.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        return ChatResponse(reply=response.content)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chat failed: {str(e)}",
+        )
+

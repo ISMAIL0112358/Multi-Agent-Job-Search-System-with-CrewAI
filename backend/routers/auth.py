@@ -57,3 +57,23 @@ async def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)
 def get_me(current_user: User = Depends(get_current_user)):
     """Get the currently authenticated user's info."""
     return UserResponse.model_validate(current_user)
+
+from backend.schemas.user import UserUpdate
+
+@router.put("/me", response_model=UserResponse)
+def update_me(
+    body: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update the authenticated user's profile."""
+    if body.name is not None:
+        current_user.name = body.name
+    if body.picture_url is not None:
+        current_user.picture_url = body.picture_url
+    if body.skills is not None:
+        current_user.skills = body.skills
+        
+    db.commit()
+    db.refresh(current_user)
+    return UserResponse.model_validate(current_user)

@@ -12,8 +12,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID") or os.getenv("VITE_GOOGLE_CLIENT_ID") or ""
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET") or ""
 
-    # API Keys
+    # API Keys & Models
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL_NAME: str = "gemini/gemini-3.5-flash"
     USAJOBS_API_KEY: str = ""
     AGENTOPS_API_KEY: str = ""
 

@@ -49,12 +49,12 @@ def search_jobs(
 
             # Run hiring score agent
             try:
-                score_result = run_hiring_score(parsed["job_summary"], convo.resume_text)
+                score_result = run_hiring_score(parsed["job_summary"], convo.resume_text, current_user.skills, body.company_preference)
                 parsed["hiring_score"] = score_result["score"]
                 parsed["hiring_score_reasoning"] = score_result["reasoning"]
-            except Exception:
+            except Exception as e:
                 parsed["hiring_score"] = None
-                parsed["hiring_score_reasoning"] = "Score unavailable"
+                parsed["hiring_score_reasoning"] = f"Score unavailable: {e}"
 
             results.append(JobResult(**parsed))
 
@@ -65,8 +65,8 @@ def search_jobs(
     user_msg = Message(
         conversation_id=conversation_id,
         role="user",
-        content=f"Search jobs: {body.keyword} in {body.location}",
-        metadata_={"type": "job_search", "keyword": body.keyword, "location": body.location},
+        content=f"Search jobs: {body.keyword} in {body.location}{f' (Preference: {body.company_preference})' if body.company_preference else ''}",
+        metadata_={"type": "job_search", "keyword": body.keyword, "location": body.location, "company_preference": body.company_preference},
     )
     db.add(user_msg)
 

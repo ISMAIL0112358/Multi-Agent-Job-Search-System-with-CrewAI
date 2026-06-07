@@ -55,6 +55,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
 app.include_router(resume.router, prefix="/api")
+app.include_router(resume.user_resumes_router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 

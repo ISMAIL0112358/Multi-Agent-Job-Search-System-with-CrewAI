@@ -6,6 +6,7 @@ class JobSearchRequest(BaseModel):
     """Request body for searching jobs."""
     keyword: str
     location: str = "remote"
+    company_preference: Optional[str] = None
     results_per_page: int = 5
 
 
@@ -38,5 +39,7 @@ class JobAnalysisResponse(BaseModel):
     jd_summary: str
     resume_tweaks: str
     cover_letter: str
+    company_profile: str
+    interview_prep: str
     hiring_score: int
     hiring_score_reasoning: str
