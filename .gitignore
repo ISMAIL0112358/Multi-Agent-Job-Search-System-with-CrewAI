@@ -1,0 +1,26 @@
+# Virtual environment
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+utils/.env
+
+# IDE
+.vscode/
+.idea/
+
+# Data / Runtime
+data/
+*.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local

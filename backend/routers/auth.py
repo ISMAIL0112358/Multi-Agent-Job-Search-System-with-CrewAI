@@ -1,0 +1,59 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from backend.database import get_db
+from backend.deps import get_current_user
+from backend.models.user import User
+from backend.schemas.user import GoogleAuthRequest, AuthTokenResponse, UserResponse
+from backend.services.auth_service import exchange_google_code, create_jwt
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post("/google", response_model=AuthTokenResponse)
+async def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """Authenticate with Google OAuth authorization code.
+    
+    Exchanges the code for user info, creates or finds the user in DB,
+    and returns a JWT token.
+    """
+    try:
+        google_user = await exchange_google_code(request.code)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to authenticate with Google: {str(e)}",
+        )
+
+    # Find or create user
+    user = db.query(User).filter(User.google_id == google_user["google_id"]).first()
+    if not user:
+        user = User(
+            google_id=google_user["google_id"],
+            email=google_user["email"],
+            name=google_user["name"],
+            picture_url=google_user.get("picture"),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        # Update profile info on each login
+        user.name = google_user["name"]
+        user.picture_url = google_user.get("picture")
+        db.commit()
+        db.refresh(user)
+
+    # Create JWT
+    token = create_jwt(user.id)
+
+    return AuthTokenResponse(
+        access_token=token,
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    """Get the currently authenticated user's info."""
+    return UserResponse.model_validate(current_user)

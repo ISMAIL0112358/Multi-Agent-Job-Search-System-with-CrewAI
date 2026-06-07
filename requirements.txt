@@ -1,0 +1,13 @@
+crewai
+langchain-google-genai
+requests
+python-dotenv
+fastapi
+uvicorn[standard]
+sqlalchemy
+python-jose[cryptography]
+python-multipart
+PyMuPDF
+agentops
+httpx
+pydantic-settings
