@@ -1,0 +1,50 @@
+.loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-3xl);
+}
+
+.loader-spinner {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.loader-ring {
+  position: absolute;
+  inset: 0;
+  border: 3px solid transparent;
+  border-radius: 50%;
+}
+
+.loader-ring:nth-child(1) {
+  border-top-color: var(--color-primary);
+  animation: spin 1s linear infinite;
+}
+
+.loader-ring:nth-child(2) {
+  inset: 4px;
+  border-right-color: var(--color-accent);
+  animation: spin 1.5s linear infinite reverse;
+}
+
+.loader-ring:nth-child(3) {
+  inset: 8px;
+  border-bottom-color: var(--color-primary-light);
+  animation: spin 2s linear infinite;
+}
+
+.loader-message {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  animation: pulse 2s ease infinite;
+}
+
+.loader-submessage {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}

@@ -1,0 +1,28 @@
+.hiring-score-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hiring-score-ring {
+  transform: rotate(-90deg);
+}
+
+.hiring-score-progress {
+  transition: stroke-dashoffset 1s ease;
+}
+
+.hiring-score-value {
+  position: absolute;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.hiring-score-badge.sm .hiring-score-value {
+  font-size: 0.65rem;
+}
+
+.hiring-score-badge.md .hiring-score-value {
+  font-size: 0.85rem;
+}
