@@ -61,3 +61,15 @@ def get_user_documents(user_id: str, doc_type: str) -> list:
                 "modified": datetime.datetime.fromtimestamp(os.path.getmtime(fpath)).isoformat(),
             })
     return files
+
+
+def save_candidate_resume(candidate_id: str, filename: str, file_bytes: bytes) -> str:
+    """Save a candidate resume PDF to the candidates directory. Returns the filepath."""
+    directory = os.path.join(settings.DATA_DIR, "candidates", candidate_id)
+    os.makedirs(directory, exist_ok=True)
+    safe_name = re.sub(r'[\\/*?:"<>|]', "_", filename)
+    filepath = os.path.join(directory, safe_name)
+    with open(filepath, "wb") as f:
+        f.write(file_bytes)
+    return filepath
+

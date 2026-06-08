@@ -25,6 +25,9 @@ async def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)
             detail=f"Failed to authenticate with Google: {str(e)}",
         )
 
+    # Determine the requested role (default job_seeker)
+    requested_role = request.role if request.role in ("job_seeker", "hr") else "job_seeker"
+
     # Find or create user
     user = db.query(User).filter(User.google_id == google_user["google_id"]).first()
     if not user:
@@ -33,14 +36,16 @@ async def google_login(request: GoogleAuthRequest, db: Session = Depends(get_db)
             email=google_user["email"],
             name=google_user["name"],
             picture_url=google_user.get("picture"),
+            role=requested_role,
         )
         db.add(user)
         db.commit()
         db.refresh(user)
     else:
-        # Update profile info on each login
+        # Update profile info and role on each login
         user.name = google_user["name"]
         user.picture_url = google_user.get("picture")
+        user.role = requested_role
         db.commit()
         db.refresh(user)
 
@@ -73,6 +78,8 @@ def update_me(
         current_user.picture_url = body.picture_url
     if body.skills is not None:
         current_user.skills = body.skills
+    if body.role is not None and body.role in ("job_seeker", "hr"):
+        current_user.role = body.role
         
     db.commit()
     db.refresh(current_user)

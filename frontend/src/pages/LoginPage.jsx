@@ -7,6 +7,7 @@ export default function LoginPage() {
       <div className="bg-ambient" />
 
       <div className="login-container animate-fade-in">
+        {/* Hero */}
         <div className="login-hero">
           <div className="login-logo">
             <svg width="56" height="56" viewBox="0 0 28 28" fill="none">
@@ -20,43 +21,72 @@ export default function LoginPage() {
               </defs>
             </svg>
           </div>
-          <h1 className="login-title">AI Job Hunt Assistant</h1>
+          <h1 className="login-title">AI Job Hunt Platform</h1>
           <p className="login-subtitle">
-            Powered by multi-agent AI to find your perfect job, score your match,
-            and craft winning resumes & cover letters.
+            Multi-agent AI for job seekers and hiring managers — powered by intelligent automation.
           </p>
         </div>
 
-        <div className="login-features">
-          <div className="login-feature">
-            <span className="login-feature-icon">📄</span>
-            <div>
-              <h3>Upload Resume</h3>
-              <p>Upload your PDF resume for AI analysis</p>
+        {/* Dual Login Cards */}
+        <div className="login-cards">
+          {/* Job Seeker Card */}
+          <div className="login-card login-card--seeker" id="login-card-seeker">
+            <div className="login-card__icon">🔍</div>
+            <h2 className="login-card__title">Job Seeker</h2>
+            <ul className="login-card__features">
+              <li>
+                <span className="login-card__bullet">📄</span>
+                Upload your resume for AI analysis
+              </li>
+              <li>
+                <span className="login-card__bullet">🎯</span>
+                Get hiring match scores for jobs
+              </li>
+              <li>
+                <span className="login-card__bullet">✍️</span>
+                AI-crafted cover letters &amp; resume tweaks
+              </li>
+            </ul>
+            <div className="login-card__action">
+              <GoogleLoginButton
+                role="job_seeker"
+                label="Sign in as Job Seeker"
+                className="login-btn--seeker"
+              />
             </div>
           </div>
-          <div className="login-feature">
-            <span className="login-feature-icon">🎯</span>
-            <div>
-              <h3>Hiring Score</h3>
-              <p>Get match percentages for each job</p>
-            </div>
-          </div>
-          <div className="login-feature">
-            <span className="login-feature-icon">✍️</span>
-            <div>
-              <h3>Smart Applications</h3>
-              <p>AI-crafted cover letters & resume tweaks</p>
+
+          {/* HR / Hiring Manager Card */}
+          <div className="login-card login-card--hr" id="login-card-hr">
+            <div className="login-card__icon">🏢</div>
+            <h2 className="login-card__title">HR / Hiring Manager</h2>
+            <ul className="login-card__features">
+              <li>
+                <span className="login-card__bullet">📋</span>
+                Screen candidates against Job Descriptions
+              </li>
+              <li>
+                <span className="login-card__bullet">📊</span>
+                AI-powered Top-N candidate matching
+              </li>
+              <li>
+                <span className="login-card__bullet">🔍</span>
+                Generate vetting Q&amp;As for interviews
+              </li>
+            </ul>
+            <div className="login-card__action">
+              <GoogleLoginButton
+                role="hr"
+                label="Sign in as HR Manager"
+                className="login-btn--hr"
+              />
             </div>
           </div>
         </div>
 
-        <div className="login-action">
-          <GoogleLoginButton />
-          <p className="login-disclaimer">
-            Sign in with your Google account to get started
-          </p>
-        </div>
+        <p className="login-disclaimer">
+          Sign in securely with your Google account • Same account can be used for both roles
+        </p>
       </div>
 
       {/* Floating orbs for visual depth */}

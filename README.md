@@ -2,29 +2,67 @@
 
 An intelligent, AI-powered job search assistant and resume optimization platform. This system utilizes multiple AI agents working in tandem (via [CrewAI](https://www.crewai.com/)) to help you find jobs, analyze job descriptions, score your resume's match percentage, and automatically tailor your resume and cover letters to specific roles.
 
-## ✨ What It Does
+### 🛠️ Built With & Powered By
 
-- **Interactive AI Chat:** Talk to an AI assistant to search for jobs based on keywords, location, and company preferences.
-- **Automated Job Searching:** Pulls real job listings via integrated APIs based on your chat requests.
-- **Resume Parsing & Storage:** Upload PDF resumes. The system parses the text and securely stores them in your profile.
-- **Hiring Scorer Agent:** Automatically compares your uploaded resume to a job description and gives you a match score (0-100%) along with reasoning.
-- **Company Profiler:** Gathers deep insights on the company including founders, company size, pay ranges, and work culture/reviews.
-- **Interview Prep Assistant:** Generates past interview questions tailored to the role and provides actionable interview preparation tips.
-- **Resume Tailor & Cover Letter Generator:** AI agents rewrite your resume to highlight the most relevant skills for a specific job and draft a personalized cover letter.
-- **Profile Management:** Manage your personal details, skill tags, and multiple versions of your resumes in a clean, modern UI.
+#### Core Stack
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=FFD62B)
+![SQLite](https://img.shields.io/badge/SQLite-07405E?style=for-the-badge&logo=sqlite&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-D71F1F?style=for-the-badge&logo=sqlalchemy&logoColor=white)
+
+#### AI Agents & RAG
+![CrewAI](https://img.shields.io/badge/CrewAI-FF4B4B?style=for-the-badge&logo=crewai&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Google%20Gemini-8E75C2?style=for-the-badge&logo=googlegemini&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-1C3C3A?style=for-the-badge&logo=langchain&logoColor=white)
+![Google Embeddings](https://img.shields.io/badge/Google%20Embeddings-Gemini--Embedding--001-4285F4?style=for-the-badge&logo=google&logoColor=white)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-blue?style=for-the-badge)
+![AgentOps](https://img.shields.io/badge/AgentOps-AI%20Observability-black?style=for-the-badge)
+
+#### Ingestion & Tools
+![Pandas](https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)
+![BeautifulSoup4](https://img.shields.io/badge/BS4-Parsing-orange?style=for-the-badge)
+![Google OAuth](https://img.shields.io/badge/Google%20OAuth%202.0-4285F4?style=for-the-badge&logo=google&logoColor=white)
+![PyMuPDF](https://img.shields.io/badge/PyMuPDF-PDF%20Parser-red?style=for-the-badge)
+![React Router](https://img.shields.io/badge/React%20Router-CA4245?style=for-the-badge&logo=react-router&logoColor=white)
+![Axios](https://img.shields.io/badge/Axios-5A29E4?style=for-the-badge&logo=axios&logoColor=white)
+
+---
+
+## ✨ Dual-Portal Capabilities
+
+The system provides separate login paths and customized interfaces for both Job Seekers and HR/Hiring Managers, accessible from a single, unified landing page.
+
+### 🔍 Job Seeker Portal
+*   **Interactive AI Chat:** Chat with a multi-agent AI crew to search for jobs based on keywords, location, and preferences.
+*   **Resume Parsing & Storage:** Upload PDF resumes. The system parses, extracts text, and stores them in your profile.
+*   **Hiring Scorer Agent:** Compares your uploaded resume to a job description, outputting a match score (0–100%) and key recommendations.
+*   **Company Profiler:** Automatically researches company size, key founders, culture, and pay scales.
+*   **Interview Prep Assistant:** Generates custom interview questions and tips tailored to the target role.
+*   **Resume Tailor & Cover Letter Generator:** Automatically rewrites your resume and drafts matching cover letters for specific job applications.
+
+### 🏢 HR & Hiring Manager Portal
+*   **Spreadsheet & Document Ingestion:** Upload PDF resumes or bulk-import candidate logs using Excel (`.xlsx`, `.xls`) or CSV spreadsheets (automatically parsing columns like `ID`, `Resume_str`, and `Category` while stripping HTML).
+*   **Fuzzy Search Directory:** Instantly search through candidates with partial names, typos, status flags, or filenames using an intelligent, scored fuzzy-matching algorithm.
+*   **AI Screening & RAG:** Match the entire candidate pool against open Job Descriptions using semantic vector searches (via ChromaDB), generating match percentages (0–100%) and clear reasoning.
+*   **Vetting Q&A Generator:** Automatically generate customized vetting questions and verification answer guides for interviews, validating candidate claims and preventing misrepresentation.
+
+---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
 - **Framework:** React + Vite
-- **Styling:** Custom CSS (Modern Glassmorphism Design)
+- **Styling:** Custom CSS (Modern glassmorphism design with responsive dark/light modes)
 - **Routing:** React Router
-- **File Uploads:** React Dropzone
+- **Features:** React Dropzone, Lucide Icons
 
 ### Backend
 - **Framework:** FastAPI (Python)
 - **Database:** SQLite with SQLAlchemy ORM
-- **Authentication:** Google OAuth 2.0
+- **Vector Search:** ChromaDB (for semantic RAG search across resumes)
+- **Data Ingestion:** Pandas, OpenPyXL, BeautifulSoup4 (for spreadsheet bulk imports)
+- **Authentication:** Google OAuth 2.0 (Role-based separation)
 - **PDF Processing:** PyPDF2 / pdfplumber
 
 ### AI & Agents
@@ -36,19 +74,18 @@ An intelligent, AI-powered job search assistant and resume optimization platform
 
 ## 🧠 Detailed Architecture Flow
 
-1. **User Authentication:** Users log in using their Google account. The backend creates a secure session and provisions a dedicated local storage directory for their files.
-2. **Profile & Skills:** Users define their core skills (stored as tags) and upload baseline PDF resumes. The backend extracts and stores the text.
-3. **Conversational Interface:** The user opens a chat and requests a job search (e.g., *"Find me Data Analyst jobs in New York"*).
-4. **Agent Orchestration:**
-   - **Job Search Tool:** Fetches real job listings matching the criteria.
-   - **Hiring Scorer Agent:** For each job, this agent compares the Job Description against the user's selected baseline resume and predefined skills, generating a "Match Score".
-5. **Tailoring Pipeline:** When a user wants to apply for a specific job:
-   - **JD Analyzer Agent:** Extracts core requirements and responsibilities from the job description.
-   - **Company Research Agent:** Pulls data on the company's background, work culture, and estimated salary ranges.
-   - **Resume Tailor Agent:** Takes the JD analysis and the user's baseline resume, outputting a highly targeted text resume.
-   - **Cover Letter Agent:** Drafts a customized cover letter for the specific company and role.
-   - **Interview Prep Agent:** Formulates potential interview questions (FAQs) and provides actionable tips based on the role and company culture.
-6. **File Persistence:** All tailored documents are saved back to the user's profile storage for easy access and future downloads.
+1. **Dual Entry Authentication:** Users log in using their Google account. Based on their selected login button, the system provisions their session under the appropriate role (`job_seeker` or `hr`).
+2. **Data & Vector Ingestion:**
+   - Job Seekers upload their individual profile details and PDFs.
+   - HR Managers upload resume folders (PDF) or tabular spreadsheets. Resumes are parsed, cleaned, and ingested into SQLite as candidate records, with embeddings pushed to ChromaDB.
+3. **Agent Orchestration (Job Seeker):**
+   - **Job Search Tool:** Queries APIs for active listings.
+   - **Resume Scorer / Tailor Agents:** Analyze job descriptions and draft personalized application files.
+4. **Agent Orchestration (HR Manager):**
+   - **Semantic Retriever:** Performs RAG queries to find the most relevant candidates for a Job Description.
+   - **AI Match Analyst:** Compares candidate profiles to the JD requirements to score suitability.
+   - **Vetting Agent:** Reviews the candidate's resume against the JD to generate specialized behavioral and technical vetting questions.
+5. **Persistence:** All screening metrics, generated Q&As, and rewritten documents are saved securely for quick dashboard retrieval.
 
 ---
 
@@ -71,6 +108,12 @@ Navigate to the root directory and set up your Python virtual environment:
 python3 -m venv venv
 source venv/bin/activate  # On Windows use: venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+Run database migrations to prepare both the Job Seeker and HR portal schemas (including user roles, candidate lists, job descriptions, and screening result tables):
+```bash
+python migrate_db.py
+python migrate_hr.py
 ```
 
 Create a `.env` file in the root directory and populate it:

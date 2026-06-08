@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     # File Storage
     DATA_DIR: str = "data"
 
+    # Vector Database (ChromaDB)
+    CHROMA_PERSIST_DIR: str = "data/chroma"
+
+    # LangSmith (optional — for tracing LangChain calls)
+    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_PROJECT: str = "hr-dashboard"
+
     class Config:
         env_file = ".env"
         extra = "ignore"

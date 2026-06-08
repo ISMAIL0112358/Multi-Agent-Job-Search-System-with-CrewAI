@@ -10,6 +10,7 @@ class UserResponse(BaseModel):
     name: str
     picture_url: Optional[str] = None
     skills: Optional[str] = None
+    role: str = "job_seeker"
     created_at: datetime
 
     class Config:
@@ -20,11 +21,13 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     picture_url: Optional[str] = None
     skills: Optional[str] = None
+    role: Optional[str] = None  # "job_seeker" or "hr"
 
 
 class GoogleAuthRequest(BaseModel):
     """Request body for Google OAuth login."""
     code: str
+    role: Optional[str] = "job_seeker"  # "job_seeker" or "hr"
 
 
 class AuthTokenResponse(BaseModel):

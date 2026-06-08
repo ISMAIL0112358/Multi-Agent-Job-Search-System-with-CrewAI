@@ -12,3 +12,10 @@ agentops
 httpx
 pydantic-settings
 beautifulsoup4
+langchain
+langchain-chroma<0.3.0
+chromadb~=1.1.0
+langsmith
+langchain-text-splitters
+openpyxl
+pandas
