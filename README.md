@@ -18,6 +18,7 @@ An intelligent, AI-powered job search assistant and resume optimization platform
 ![Google Embeddings](https://img.shields.io/badge/Google%20Embeddings-Gemini--Embedding--001-4285F4?style=for-the-badge&logo=google&logoColor=white)
 ![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-blue?style=for-the-badge)
 ![AgentOps](https://img.shields.io/badge/AgentOps-AI%20Observability-black?style=for-the-badge)
+![LangSmith](https://img.shields.io/badge/LangSmith-AI%20Tracing-01C3A0?style=for-the-badge&logo=langchain&logoColor=white)
 
 #### Ingestion & Tools
 ![Pandas](https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)
@@ -69,6 +70,8 @@ The system provides separate login paths and customized interfaces for both Job 
 - **Multi-Agent Framework:** CrewAI
 - **LLM Provider:** Google Gemini (`gemini-1.5-flash` / `gemini-1.5-pro`) via LiteLLM
 - **Agent Monitoring:** AgentOps
+- **RAG & Chain Monitoring:** LangSmith (for tracing LangChain embeddings and vector store queries)
+
 
 ---
 
@@ -131,6 +134,11 @@ USAJOBS_API_KEY=your_usajobs_api_key
 
 # AgentOps Monitoring
 AGENTOPS_API_KEY=your_agentops_api_key
+
+# LangSmith Monitoring (optional)
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=your_langsmith_api_key
+LANGCHAIN_PROJECT=Multi-Agent-Job-Search-System
 ```
 
 Run the FastAPI backend server:
