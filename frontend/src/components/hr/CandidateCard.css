@@ -1,0 +1,89 @@
+.candidate-card {
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  animation: fadeIn 0.4s ease forwards;
+}
+
+.candidate-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.candidate-card__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 0 16px var(--color-primary-glow);
+}
+
+.candidate-card__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.candidate-card__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.candidate-card__email,
+.candidate-card__phone {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.candidate-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.candidate-card__file {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.candidate-card__date {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.candidate-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.candidate-card__status-select {
+  flex: 1;
+  padding: 6px var(--space-sm);
+  font-size: 0.8rem;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}

@@ -14,6 +14,7 @@ class User(Base):
     name = Column(String, nullable=False)
     picture_url = Column(String, nullable=True)
     skills = Column(String, nullable=True)
+    role = Column(String, default="job_seeker", nullable=False)  # "job_seeker" or "hr"
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):

@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ProfilePage from './pages/ProfilePage';
+import HRDashboardPage from './pages/HRDashboardPage';
 import Loader from './components/Loader';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -18,7 +19,7 @@ function ProtectedRoute({ children }) {
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Loader message="Loading..." />;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={user.role === 'hr' ? '/hr' : '/'} replace />;
   return children;
 }
 
@@ -49,6 +50,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ProfilePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hr"
+              element={
+                <ProtectedRoute>
+                  <HRDashboardPage />
                 </ProtectedRoute>
               }
             />

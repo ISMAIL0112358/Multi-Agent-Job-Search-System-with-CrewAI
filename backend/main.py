@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.database import Base, engine
 from backend.middleware.agentops import init_agentops
-from backend.routers import auth, conversations, resume, jobs, agents
+from backend.routers import auth, conversations, resume, jobs, agents, hr
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +21,12 @@ async def lifespan(app: FastAPI):
     logger.info("Creating database tables...")
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created.")
+
+    # Ensure ChromaDB persist directory exists
+    import os
+    from backend.config import settings
+    os.makedirs(settings.CHROMA_PERSIST_DIR, exist_ok=True)
+    logger.info("ChromaDB persist directory ready: %s", settings.CHROMA_PERSIST_DIR)
 
     logger.info("Initializing AgentOps...")
     init_agentops()
@@ -58,6 +64,7 @@ app.include_router(resume.router, prefix="/api")
 app.include_router(resume.user_resumes_router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
+app.include_router(hr.router, prefix="/api")
 
 
 @app.get("/api/health")

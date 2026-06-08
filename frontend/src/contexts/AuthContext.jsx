@@ -30,8 +30,8 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = useCallback(async (googleCode) => {
-    const response = await client.post('/auth/google', { code: googleCode });
+  const login = useCallback(async (googleCode, role = 'job_seeker') => {
+    const response = await client.post('/auth/google', { code: googleCode, role });
     const { access_token, user: userData } = response.data;
     localStorage.setItem('auth_token', access_token);
     localStorage.setItem('user', JSON.stringify(userData));

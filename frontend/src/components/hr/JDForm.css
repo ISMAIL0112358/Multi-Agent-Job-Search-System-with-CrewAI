@@ -1,0 +1,48 @@
+.jd-form {
+  padding: var(--space-xl);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  animation: slideUp 0.4s ease forwards;
+}
+
+.jd-form__title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.jd-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.jd-form__field label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.jd-form__textarea {
+  resize: vertical;
+  min-height: 160px;
+  line-height: 1.6;
+}
+
+.jd-form__submit {
+  align-self: flex-start;
+  padding: var(--space-sm) var(--space-xl);
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}

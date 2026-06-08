@@ -38,6 +38,16 @@ export default function Navbar() {
               referrerPolicy="no-referrer"
             />
           )}
+          {user.role === 'hr' && (
+            <>
+              <button className="btn btn-ghost" onClick={() => navigate('/')} id="nav-home-btn">
+                Home
+              </button>
+              <button className="btn btn-secondary" onClick={() => navigate('/hr')} id="nav-hr-btn">
+                🎯 HR Dashboard
+              </button>
+            </>
+          )}
           <button className="btn btn-secondary navbar-profile-btn" onClick={() => navigate('/profile')}>
             Profile
           </button>
