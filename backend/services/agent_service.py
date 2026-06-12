@@ -93,6 +93,7 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
     company_task = create_company_profile_task(company_agent, agency_name, job_title)
     interview_task = create_interview_prep_task(interview_agent, job_summary, job_title)
 
+    #todo: make it parallel
     # Run the crew
     crew = Crew(
         agents=[jd_agent, resume_agent, message_agent, company_agent, interview_agent],

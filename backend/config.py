@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24
 
+    # Environment (local vs prod)
+    ENV: str = os.getenv("ENV") or "prod"
+
+    # Local Ollama Settings
+    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434"
+    LOCAL_LLM_MODEL: str = os.getenv("LOCAL_LLM_MODEL") or "gemma4"
+    LOCAL_EMBEDDING_MODEL: str = os.getenv("LOCAL_EMBEDDING_MODEL") or "embeddinggemma"
+
     # Database
     DATABASE_URL: str = "sqlite:///./data/app.db"
 

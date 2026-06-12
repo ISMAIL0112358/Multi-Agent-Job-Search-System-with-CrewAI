@@ -129,6 +129,14 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL_NAME=gemini/gemini-1.5-flash
 
+# Environment (prod or local)
+ENV=prod # Set to 'local' to use Ollama
+
+# Local Ollama Settings (Required if ENV=local)
+OLLAMA_BASE_URL=http://localhost:11434
+LOCAL_LLM_MODEL=gemma4
+LOCAL_EMBEDDING_MODEL=embeddinggemma
+
 # USAJobs API (or other integrated job board)
 USAJOBS_API_KEY=your_usajobs_api_key
 
@@ -140,6 +148,21 @@ LANGCHAIN_TRACING_V2=true
 LANGCHAIN_API_KEY=your_langsmith_api_key
 LANGCHAIN_PROJECT=Multi-Agent-Job-Search-System
 ```
+
+### 🦙 Local LLM & Embeddings (Ollama Setup)
+To run the application entirely on your local machine using open models (such as `gemma`):
+
+1. Install [Ollama](https://ollama.com/).
+2. Pull the required LLM and Embedding models in your terminal:
+   ```bash
+   ollama pull gemma4          # For agents, screening, and chat
+   ollama pull embeddinggemma  # For candidate resume database embeddings
+   ```
+3. Change the `ENV` setting in your `.env` file:
+   ```env
+   ENV=local
+   ```
+4. Start your local Ollama application/server. The backend will automatically switch to local embeddings and agent execution.
 
 Run the FastAPI backend server:
 ```bash

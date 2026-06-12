@@ -11,6 +11,7 @@ import re
 from typing import Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from pydantic import BaseModel, Field
@@ -62,16 +63,23 @@ class ScreeningService:
             os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
             logger.info("LangSmith tracing enabled for project: %s", settings.LANGSMITH_PROJECT)
 
-        # Strip "gemini/" prefix if present for langchain-google-genai compatibility
-        model_name = settings.GEMINI_MODEL_NAME
-        if model_name.startswith("gemini/"):
-            model_name = model_name[len("gemini/"):]
+        if settings.ENV == "local":
+            self._llm = ChatOllama(
+                model=settings.LOCAL_LLM_MODEL,
+                base_url=settings.OLLAMA_BASE_URL,
+                temperature=0.2,
+            )
+        else:
+            # Strip "gemini/" prefix if present for langchain-google-genai compatibility
+            model_name = settings.GEMINI_MODEL_NAME
+            if model_name.startswith("gemini/"):
+                model_name = model_name[len("gemini/"):]
 
-        self._llm = ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=settings.GEMINI_API_KEY,
-            temperature=0.2,
-        )
+            self._llm = ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=settings.GEMINI_API_KEY,
+                temperature=0.2,
+            )
 
         self._vector_service = vector_service or VectorService.get_instance()
 
