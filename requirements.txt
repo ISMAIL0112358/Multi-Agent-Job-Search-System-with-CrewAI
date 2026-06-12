@@ -19,3 +19,4 @@ langsmith
 langchain-text-splitters
 openpyxl
 pandas
+langchain-ollama

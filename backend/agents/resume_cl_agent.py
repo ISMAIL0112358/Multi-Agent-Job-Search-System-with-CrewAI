@@ -1,13 +1,9 @@
-from crewai import Agent, Task, LLM
-from backend.config import settings
+from crewai import Agent, Task
+from backend.agents.llm_provider import get_agent_llm
 
 
 def _get_llm():
-    return LLM(
-        model=settings.GEMINI_MODEL_NAME,
-        temperature=0.3,
-        api_key=settings.GEMINI_API_KEY,
-    )
+    return get_agent_llm(temperature=0.3)
 
 
 def get_resume_cl_agent() -> Agent:

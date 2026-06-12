@@ -9,6 +9,7 @@ import os
 from typing import Optional
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 
@@ -26,10 +27,16 @@ class VectorService:
     def __init__(self):
         os.makedirs(settings.CHROMA_PERSIST_DIR, exist_ok=True)
 
-        self._embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
-            google_api_key=settings.GEMINI_API_KEY,
-        )
+        if settings.ENV == "local":
+            self._embeddings = OllamaEmbeddings(
+                model=settings.LOCAL_EMBEDDING_MODEL,
+                base_url=settings.OLLAMA_BASE_URL,
+            )
+        else:
+            self._embeddings = GoogleGenerativeAIEmbeddings(
+                model="models/gemini-embedding-001",
+                google_api_key=settings.GEMINI_API_KEY,
+            )
 
         self._vectorstore = Chroma(
             collection_name=self._collection_name,

@@ -84,6 +84,7 @@ def analyze_job(
 
 from backend.schemas.chat import ChatRequest, ChatResponse
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
 from backend.config import settings
 
 @router.post("/{conversation_id}/chat", response_model=ChatResponse)
@@ -105,15 +106,22 @@ def chat_followup(
 
     # Use LangChain to query the model directly
     try:
-        # Check if the model name is set correctly, some Langchain versions require google/ prefix, some do not
-        # We will use the model name from settings but strip any "gemini/" prefix if present as Langchain handles it
-        model_name = settings.GEMINI_MODEL_NAME.replace("gemini/", "") if settings.GEMINI_MODEL_NAME.startswith("gemini/") else settings.GEMINI_MODEL_NAME
-        
-        llm = ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=settings.GEMINI_API_KEY,
-            temperature=0.3,
-        )
+        if settings.ENV == "local":
+            llm = ChatOllama(
+                model=settings.LOCAL_LLM_MODEL,
+                base_url=settings.OLLAMA_BASE_URL,
+                temperature=0.3,
+            )
+        else:
+            # Check if the model name is set correctly, some Langchain versions require google/ prefix, some do not
+            # We will use the model name from settings but strip any "gemini/" prefix if present as Langchain handles it
+            model_name = settings.GEMINI_MODEL_NAME.replace("gemini/", "") if settings.GEMINI_MODEL_NAME.startswith("gemini/") else settings.GEMINI_MODEL_NAME
+            
+            llm = ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=settings.GEMINI_API_KEY,
+                temperature=0.3,
+            )
         
         from langchain.schema import HumanMessage, SystemMessage
         
