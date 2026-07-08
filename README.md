@@ -1,6 +1,6 @@
-# Multi-Agent Job Search System with CrewAI 🚀
+# AI Job Hunt & Recruitment Assistant 🚀
 
-An intelligent, AI-powered job search assistant and resume optimization platform. This system utilizes multiple AI agents working in tandem (via [CrewAI](https://www.crewai.com/)) to help you find jobs, analyze job descriptions, score your resume's match percentage, and automatically tailor your resume and cover letters to specific roles.
+An AI-driven job hunt and talent recruitment platform using cooperative [CrewAI](https://www.crewai.com/) agents to assist both candidates and HR personnel. This dual-portal system helps job seekers find and tailor applications, while enabling HR professionals and hiring managers to ingest, search, screen, and vet candidate pools.
 
 ### 🛠️ Built With & Powered By
 

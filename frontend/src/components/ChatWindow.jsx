@@ -87,7 +87,7 @@ export default function ChatWindow({ conversationId }) {
               <line x1="15" y1="9" x2="15.01" y2="9"/>
             </svg>
           </div>
-          <h2>Welcome to AI Job Hunt</h2>
+          <h2>Welcome to AI Job Hunt & Recruitment</h2>
           <p>Select a conversation or create a new one to get started.</p>
         </div>
       </div>

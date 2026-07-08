@@ -21,7 +21,7 @@ export default function Navbar() {
             </defs>
           </svg>
         </div>
-        <h1 className="navbar-title">AI Job Hunt</h1>
+        <h1 className="navbar-title">AI Job Hunt & Recruitment</h1>
       </div>
 
       {user && (
