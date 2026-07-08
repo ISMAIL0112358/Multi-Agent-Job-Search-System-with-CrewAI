@@ -38,8 +38,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AI Job Hunt Assistant",
-    description="Multi-agent job search system with CrewAI",
+    title="AI Job Hunt & Recruitment Assistant",
+    description="An AI-driven job hunt and talent recruitment platform using cooperative CrewAI agents to assist both candidates and HR personnel",
     version="2.0.0",
     lifespan=lifespan,
 )
