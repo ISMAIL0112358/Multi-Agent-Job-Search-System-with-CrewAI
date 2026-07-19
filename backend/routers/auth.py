@@ -84,3 +84,12 @@ def update_me(
     db.commit()
     db.refresh(current_user)
     return UserResponse.model_validate(current_user)
+
+
+@router.get("/config")
+def get_config():
+    """Get public configurations, such as Google Client ID."""
+    from backend.config import settings
+    return {
+        "google_client_id": settings.GOOGLE_CLIENT_ID
+    }
