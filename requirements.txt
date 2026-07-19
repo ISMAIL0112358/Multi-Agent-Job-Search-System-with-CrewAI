@@ -13,6 +13,7 @@ httpx
 pydantic-settings
 beautifulsoup4
 langchain
+langchain-community
 langchain-chroma<0.3.0
 chromadb~=1.1.0
 langsmith
