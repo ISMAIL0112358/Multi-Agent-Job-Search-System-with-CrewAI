@@ -50,7 +50,7 @@ class VectorService:
             )
 
         if settings.VECTOR_STORE_PROVIDER == "pgvector":
-            from langchain_community.vectorstores import PGVector
+            from langchain_community.vectorstores.pgvector import PGVector
             self._vectorstore = PGVector(
                 connection_string=settings.DATABASE_URL,
                 embedding_function=self._embeddings,
