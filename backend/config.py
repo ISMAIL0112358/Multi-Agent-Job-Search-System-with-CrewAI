@@ -5,6 +5,38 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _load_aws_secrets():
+    secret_name = os.getenv("AWS_SECRET_NAME")
+    if not secret_name:
+        return
+
+    region_name = os.getenv("AWS_REGION") or "us-east-1"
+    try:
+        import boto3
+        import json
+
+        session = boto3.session.Session()
+        client = session.client(
+            service_name='secretsmanager',
+            region_name=region_name
+        )
+
+        response = client.get_secret_value(SecretId=secret_name)
+        if 'SecretString' in response:
+            secrets = json.loads(response['SecretString'])
+            for key, val in secrets.items():
+                # Load them into os.environ so Pydantic automatically picks them up
+                os.environ[key] = str(val)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Failed to load secrets from AWS Secrets Manager ({secret_name}): {e}"
+        )
+
+
+_load_aws_secrets()
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
