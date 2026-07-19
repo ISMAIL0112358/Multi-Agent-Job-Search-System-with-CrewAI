@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
     env_file:
@@ -20,5 +20,5 @@ services:
       args:
         - VITE_API_URL=/api # Will proxy /api requests to backend or use backend domain
     ports:
-      - "80:80"
+      - "127.0.0.1:8080:80"
     restart: always
