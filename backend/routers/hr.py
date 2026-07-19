@@ -25,12 +25,16 @@ from backend.models.job_description import JobDescription
 from backend.models.screening_result import ScreeningResult
 from backend.schemas.hr import (
     CandidateDetail,
-    CandidateVettingResponse,
-    JobDescriptionDetail,
-    JobDescriptionCreate,
-    VettingQuestionsRequest,
-    VettingQuestionSchema,
+    CandidateUploadResponse,
     StatusUpdate,
+    JobDescriptionCreate,
+    JobDescriptionUpdate,
+    JobDescriptionResponse,
+    ScreenRequest,
+    ScreeningResultResponse,
+    VettingRequest,
+    VettingQuestionResponse,
+    DashboardStats,
 )
 from backend.services.pdf_service import extract_text_from_pdf
 from backend.services.storage_service import save_candidate_resume, generate_candidate_resume_download_url
