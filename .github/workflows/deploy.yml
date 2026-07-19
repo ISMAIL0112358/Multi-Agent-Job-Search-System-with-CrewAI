@@ -1,0 +1,29 @@
+name: CD Production Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH and Auto-Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            # Navigate to repo
+            cd /home/ubuntu/Multi-Agent-Job-Search-System-with-CrewAI
+            
+            # Fetch latest commits
+            git pull origin main
+            
+            # Rebuild and restart containers in background
+            docker-compose up -d --build
