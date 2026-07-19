@@ -36,9 +36,13 @@ class Settings(BaseSettings):
 
     # File Storage
     DATA_DIR: str = "data"
+    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER") or "local"
+    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME") or ""
+    AWS_REGION: str = os.getenv("AWS_REGION") or "us-east-1"
 
-    # Vector Database (ChromaDB)
+    # Vector Database (ChromaDB / pgvector)
     CHROMA_PERSIST_DIR: str = "data/chroma"
+    VECTOR_STORE_PROVIDER: str = os.getenv("VECTOR_STORE_PROVIDER") or "chroma"
 
     # LangSmith (optional — for tracing LangChain calls)
     LANGSMITH_API_KEY: str = ""

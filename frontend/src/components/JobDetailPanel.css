@@ -286,3 +286,17 @@
   justify-content: center;
   flex-shrink: 0;
 }
+
+.job-detail-linkedin-link {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: var(--color-accent-light);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color var(--transition-fast);
+}
+
+.job-detail-linkedin-link:hover {
+  color: var(--color-primary-light);
+  text-decoration: underline;
+}

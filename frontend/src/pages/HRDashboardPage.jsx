@@ -388,12 +388,12 @@ export default function HRDashboardPage() {
                     <input
                       id="file-input-upload"
                       type="file"
-                      accept=".pdf,.xlsx,.xls,.csv"
+                      accept=".pdf"
                       multiple
                       style={{ display: 'none' }}
                       onChange={(e) => handleFileUpload(e.target.files)}
                     />
-                    <span className="upload-zone__hint">Supports PDF, Excel (.xlsx/.xls), and CSV • Bulk upload supported</span>
+                    <span className="upload-zone__hint">Supports PDF only • Bulk upload supported</span>
                   </>
                 )}
               </div>

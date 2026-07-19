@@ -63,11 +63,17 @@ class ScreeningService:
             os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
             logger.info("LangSmith tracing enabled for project: %s", settings.LANGSMITH_PROJECT)
 
+        # Get AgentOps callback handler for LangChain if configured
+        from backend.middleware.agentops import get_agentops_callback_handler
+        handler = get_agentops_callback_handler(tags=["hr-screening"])
+        callbacks = [handler] if handler else None
+
         if settings.ENV == "local":
             self._llm = ChatOllama(
                 model=settings.LOCAL_LLM_MODEL,
                 base_url=settings.OLLAMA_BASE_URL,
                 temperature=0.2,
+                callbacks=callbacks,
             )
         else:
             # Strip "gemini/" prefix if present for langchain-google-genai compatibility
@@ -79,6 +85,7 @@ class ScreeningService:
                 model=model_name,
                 google_api_key=settings.GEMINI_API_KEY,
                 temperature=0.2,
+                callbacks=callbacks,
             )
 
         self._vector_service = vector_service or VectorService.get_instance()
@@ -123,32 +130,35 @@ class ScreeningService:
             logger.info("No candidates found in vector search")
             return []
 
-        # Step 2: For each unique candidate, run detailed matching via LLM
-        results = []
-        for candidate_match in search_results[:top_n]:
-            candidate_id = candidate_match["candidate_id"]
+        # Step 2: For each unique candidate, run detailed matching via LLM in parallel
+        from concurrent.futures import ThreadPoolExecutor
 
-            # Get full resume text if available, otherwise use the chunk
+        def score_single(candidate_match):
+            candidate_id = candidate_match["candidate_id"]
             resume_text = (
                 candidate_resumes.get(candidate_id, candidate_match["chunk_text"])
                 if candidate_resumes
                 else candidate_match["chunk_text"]
             )
-
             try:
                 match_result = self._score_candidate(jd_text, resume_text)
-                results.append({
+                return {
                     "candidate_id": candidate_id,
                     "match_score": match_result.match_score,
                     "match_justification": match_result.justification,
-                })
+                }
             except Exception as e:
                 logger.error("Failed to score candidate %s: %s", candidate_id, e)
-                results.append({
+                return {
                     "candidate_id": candidate_id,
                     "match_score": candidate_match["score"] * 100,  # Fallback to vector similarity
                     "match_justification": f"Scoring based on semantic similarity (LLM scoring failed: {e})",
-                })
+                }
+
+        results = []
+        with ThreadPoolExecutor(max_workers=min(top_n, 10)) as executor:
+            # Concurrently process candidate evaluations
+            results = list(executor.map(score_single, search_results[:top_n]))
 
         # Sort by match_score descending
         results.sort(key=lambda x: x["match_score"], reverse=True)

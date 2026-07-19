@@ -59,7 +59,21 @@
 
 .job-card-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.job-card-linkedin-link {
+  font-size: 0.78rem;
+  color: var(--color-accent-light);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color var(--transition-fast);
+}
+
+.job-card-linkedin-link:hover {
+  color: var(--color-primary-light);
+  text-decoration: underline;
 }
 
 .job-card-cta {

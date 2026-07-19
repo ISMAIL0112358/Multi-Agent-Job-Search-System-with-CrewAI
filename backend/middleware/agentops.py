@@ -25,3 +25,18 @@ def init_agentops():
         logger.warning("agentops package not installed — monitoring disabled")
     except Exception as e:
         logger.error(f"Failed to initialize AgentOps: {e}")
+
+
+def get_agentops_callback_handler(tags=None):
+    """Get the LangChain callback handler for AgentOps if configured."""
+    if not settings.AGENTOPS_API_KEY:
+        return None
+    try:
+        from agentops.integration.callbacks.langchain import LangchainCallbackHandler
+        return LangchainCallbackHandler(
+            api_key=settings.AGENTOPS_API_KEY,
+            tags=tags or ["job-search-system"],
+        )
+    except Exception as e:
+        logger.warning(f"Failed to load AgentOps LangchainCallbackHandler: {e}")
+        return None
