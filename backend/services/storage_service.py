@@ -2,6 +2,7 @@ import os
 import re
 import datetime
 import logging
+from typing import Optional
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
