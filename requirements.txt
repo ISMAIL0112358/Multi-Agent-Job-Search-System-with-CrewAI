@@ -20,3 +20,7 @@ langchain-text-splitters
 openpyxl
 pandas
 langchain-ollama
+psycopg2-binary
+boto3
+
+

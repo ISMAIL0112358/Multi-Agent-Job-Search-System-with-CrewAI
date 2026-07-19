@@ -6,17 +6,16 @@ All endpoints require authenticated user with HR role.
 """
 import logging
 import uuid
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-import io
 import re as re_module
-
-import pandas as pd
-from bs4 import BeautifulSoup
+from backend.config import settings
 
 from backend.database import get_db
 from backend.deps import require_hr_role
@@ -26,19 +25,15 @@ from backend.models.job_description import JobDescription
 from backend.models.screening_result import ScreeningResult
 from backend.schemas.hr import (
     CandidateDetail,
-    CandidateUploadResponse,
-    StatusUpdate,
+    CandidateVettingResponse,
+    JobDescriptionDetail,
     JobDescriptionCreate,
-    JobDescriptionUpdate,
-    JobDescriptionResponse,
-    ScreenRequest,
-    ScreeningResultResponse,
-    VettingRequest,
-    VettingQuestionResponse,
-    DashboardStats,
+    VettingQuestionsRequest,
+    VettingQuestionSchema,
+    StatusUpdate,
 )
 from backend.services.pdf_service import extract_text_from_pdf
-from backend.services.storage_service import save_candidate_resume
+from backend.services.storage_service import save_candidate_resume, generate_candidate_resume_download_url
 from backend.services.vector_service import VectorService
 from backend.services.screening_service import ScreeningService
 
@@ -46,15 +41,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/hr", tags=["HR Dashboard"])
 
-ALLOWED_EXTENSIONS = {".pdf", ".xlsx", ".xls", ".csv"}
-
-
-def _clean_html(html: str) -> str:
-    """Strip HTML tags and return plain text."""
-    if not html:
-        return ""
-    soup = BeautifulSoup(html, "html.parser")
-    return soup.get_text(separator="\n", strip=True)
+ALLOWED_EXTENSIONS = {".pdf"}
 
 
 def _process_single_resume(
@@ -147,12 +134,9 @@ async def upload_candidates(
     current_user: User = Depends(require_hr_role),
     db: Session = Depends(get_db),
 ):
-    """Upload candidate resumes as PDFs, Excel (.xlsx/.xls), or CSV files.
+    """Upload candidate resumes as PDFs.
 
     **PDF**: Each file is parsed via PyMuPDF to extract text.
-    **Excel/CSV**: Expected columns: ID, Resume_str, Resume_html, Category.
-      - Each row becomes a separate candidate.
-      - Uses Resume_str if available; falls back to stripped Resume_html.
     """
     results = []
     vector_service = VectorService.get_instance()
@@ -172,91 +156,30 @@ async def upload_candidates(
             continue
 
         # ── PDF Upload ───────────────────────────────────────
-        if ext == ".pdf":
-            try:
-                resume_text = extract_text_from_pdf(file_bytes)
-            except Exception as e:
-                logger.error("Failed to extract text from %s: %s", file.filename, e)
-                continue
+        try:
+            resume_text = extract_text_from_pdf(file_bytes)
+        except Exception as e:
+            logger.error("Failed to extract text from %s: %s", file.filename, e)
+            continue
 
-            save_candidate_resume("pdf_" + str(uuid.uuid4())[:8], file.filename, file_bytes)
+        save_candidate_resume("pdf_" + str(uuid.uuid4())[:8], file.filename, file_bytes)
 
-            result = _process_single_resume(
-                resume_text=resume_text,
-                source_label=file.filename,
-                category=None,
-                screening_service=screening_service,
-                vector_service=vector_service,
-                current_user=current_user,
-                db=db,
-            )
-            if result:
-                results.append(result)
-
-        # ── Excel / CSV Upload ────────────────────────────────
-        elif ext in (".xlsx", ".xls", ".csv"):
-            try:
-                if ext == ".csv":
-                    df = pd.read_csv(io.BytesIO(file_bytes))
-                else:
-                    df = pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
-            except Exception as e:
-                logger.error("Failed to parse spreadsheet %s: %s", file.filename, e)
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Failed to parse {file.filename}: {str(e)}",
-                )
-
-            # Normalize column names (case-insensitive)
-            df.columns = [c.strip().lower() for c in df.columns]
-
-            has_resume_str = "resume_str" in df.columns
-            has_resume_html = "resume_html" in df.columns
-            has_category = "category" in df.columns
-
-            if not has_resume_str and not has_resume_html:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Spreadsheet {file.filename} must have a 'Resume_str' or 'Resume_html' column.",
-                )
-
-            logger.info(
-                "Processing spreadsheet %s: %d rows, columns=%s",
-                file.filename, len(df), list(df.columns),
-            )
-
-            for idx, row in df.iterrows():
-                # Get resume text: prefer Resume_str, fall back to HTML stripped
-                resume_text = ""
-                if has_resume_str and pd.notna(row.get("resume_str")):
-                    resume_text = str(row["resume_str"]).strip()
-                if not resume_text and has_resume_html and pd.notna(row.get("resume_html")):
-                    resume_text = _clean_html(str(row["resume_html"]))
-
-                if not resume_text:
-                    logger.warning("Row %d in %s has no resume text, skipping", idx, file.filename)
-                    continue
-
-                row_id = str(row.get("id", idx)) if "id" in df.columns and pd.notna(row.get("id")) else str(idx)
-                category = str(row["category"]) if has_category and pd.notna(row.get("category")) else None
-                source_label = f"{file.filename} (row {idx}, cat: {category or 'N/A'})"
-
-                result = _process_single_resume(
-                    resume_text=resume_text,
-                    source_label=source_label,
-                    category=category,
-                    screening_service=screening_service,
-                    vector_service=vector_service,
-                    current_user=current_user,
-                    db=db,
-                )
-                if result:
-                    results.append(result)
+        result = _process_single_resume(
+            resume_text=resume_text,
+            source_label=file.filename,
+            category=None,
+            screening_service=screening_service,
+            vector_service=vector_service,
+            current_user=current_user,
+            db=db,
+        )
+        if result:
+            results.append(result)
 
     if not results:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No valid resumes were found in the uploaded files. Supported: PDF, Excel (.xlsx/.xls), CSV.",
+            detail="No valid resumes were found in the uploaded files. Supported: PDF.",
         )
 
     return results
@@ -292,6 +215,50 @@ def get_candidate(
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
     return CandidateDetail.model_validate(candidate)
+
+
+@router.get("/candidates/{candidate_id}/download")
+def download_candidate_resume(
+    candidate_id: str,
+    current_user: User = Depends(require_hr_role),
+    db: Session = Depends(get_db),
+):
+    """Download the candidate's original resume PDF file."""
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
+
+    if settings.STORAGE_PROVIDER == "s3":
+        url = generate_candidate_resume_download_url(candidate.id, candidate.resume_filename)
+        if not url:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate secure S3 download link."
+            )
+        return RedirectResponse(url=url)
+
+    safe_name = re_module.sub(r'[\\/*?:"<>|]', "_", candidate.resume_filename)
+    filepath = os.path.join(settings.DATA_DIR, "candidates", candidate.id, safe_name)
+
+    if not os.path.exists(filepath):
+        # Fallback to general storage name search
+        directory = os.path.join(settings.DATA_DIR, "candidates", candidate.id)
+        if os.path.exists(directory):
+            files = os.listdir(directory)
+            if files:
+                filepath = os.path.join(directory, files[0])
+
+    if not os.path.exists(filepath):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume file not found on disk."
+        )
+
+    return FileResponse(
+        path=filepath,
+        filename=candidate.resume_filename,
+        media_type="application/pdf"
+    )
 
 
 @router.patch("/candidates/{candidate_id}/status", response_model=CandidateDetail)

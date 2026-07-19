@@ -13,6 +13,7 @@ class CandidateDetail(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     resume_filename: str
+    resume_text: Optional[str] = None
     status: str
     uploaded_by: Optional[str] = None
     created_at: Optional[datetime] = None

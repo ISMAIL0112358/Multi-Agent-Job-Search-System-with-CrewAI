@@ -102,6 +102,18 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onC
             <h2 className="job-detail-title">{job.position_title}</h2>
             <p className="job-detail-org">{job.organization_name}</p>
             <span className="job-detail-location">📍 {job.location}</span>
+            {job.url && (
+              <div style={{ marginTop: 'var(--space-xs)' }}>
+                <a 
+                  href={job.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="job-detail-linkedin-link"
+                >
+                  🔗 View on LinkedIn
+                </a>
+              </div>
+            )}
           </div>
           <div className="job-detail-header-actions">
             {job.hiring_score != null && (

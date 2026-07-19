@@ -33,6 +33,19 @@ export default function JobCard({ job, onClick, index }) {
         {job.job_summary?.slice(0, 180)}{job.job_summary?.length > 180 ? '...' : ''}
       </p>
       <div className="job-card-footer">
+        {job.url ? (
+          <a
+            href={job.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="job-card-linkedin-link"
+            onClick={(e) => e.stopPropagation()}
+          >
+            🔗 Apply on LinkedIn
+          </a>
+        ) : (
+          <span />
+        )}
         <span className="job-card-cta">
           View analysis & cover letter →
         </span>

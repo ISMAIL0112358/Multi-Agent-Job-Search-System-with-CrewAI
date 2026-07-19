@@ -106,11 +106,16 @@ def chat_followup(
 
     # Use LangChain to query the model directly
     try:
+        from backend.middleware.agentops import get_agentops_callback_handler
+        handler = get_agentops_callback_handler(tags=["chat-followup"])
+        callbacks = [handler] if handler else None
+
         if settings.ENV == "local":
             llm = ChatOllama(
                 model=settings.LOCAL_LLM_MODEL,
                 base_url=settings.OLLAMA_BASE_URL,
                 temperature=0.3,
+                callbacks=callbacks,
             )
         else:
             # Check if the model name is set correctly, some Langchain versions require google/ prefix, some do not
@@ -121,9 +126,10 @@ def chat_followup(
                 model=model_name,
                 google_api_key=settings.GEMINI_API_KEY,
                 temperature=0.3,
+                callbacks=callbacks,
             )
         
-        from langchain.schema import HumanMessage, SystemMessage
+        from langchain_core.messages import HumanMessage, SystemMessage
         
         system_prompt = f"""
         You are a helpful career advisor assisting a user with a job application.
@@ -143,6 +149,21 @@ def chat_followup(
         
         response = llm.invoke(messages)
         
+        # Safely extract text content from LLM response (ChatGoogleGenerativeAI can return list of dicts)
+        content = response.content
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict):
+                    parts.append(part.get("text", str(part)))
+                elif isinstance(part, str):
+                    parts.append(part)
+                else:
+                    parts.append(str(part))
+            reply_text = "\n".join(parts)
+        else:
+            reply_text = str(content)
+        
         # Save as conversation messages
         user_msg = Message(
             conversation_id=conversation_id,
@@ -153,7 +174,7 @@ def chat_followup(
         assistant_msg = Message(
             conversation_id=conversation_id,
             role="assistant",
-            content=response.content,
+            content=reply_text,
             metadata_={"type": "followup_answer"}
         )
         db.add(user_msg)
@@ -162,7 +183,7 @@ def chat_followup(
         convo.updated_at = datetime.now(timezone.utc)
         db.commit()
         
-        return ChatResponse(reply=response.content)
+        return ChatResponse(reply=reply_text)
         
     except Exception as e:
         raise HTTPException(

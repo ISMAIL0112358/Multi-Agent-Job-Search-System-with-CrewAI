@@ -93,31 +93,63 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
     company_task = create_company_profile_task(company_agent, agency_name, job_title)
     interview_task = create_interview_prep_task(interview_agent, job_summary, job_title)
 
-    #todo: make it parallel
-    # Run the crew
-    crew = Crew(
-        agents=[jd_agent, resume_agent, message_agent, company_agent, interview_agent],
-        tasks=[jd_task, resume_task, message_task, company_task, interview_task],
-        process=Process.sequential,
-    )
-    result = crew.kickoff()
+    # Run tasks in parallel using ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor
 
-    # Get individual task outputs
-    jd_output = str(jd_task.output) if jd_task.output else ""
-    resume_output = str(resume_task.output) if resume_task.output else ""
-    message_output = str(message_task.output) if message_task.output else ""
-    company_output = str(company_task.output) if company_task.output else ""
-    interview_output = str(interview_task.output) if interview_task.output else ""
+    def _run_single_agent_task(agent, task) -> str:
+        """Run a single task using its assigned agent inside a temporary Crew."""
+        crew = Crew(
+            agents=[agent],
+            tasks=[task],
+            process=Process.sequential,
+            verbose=False,
+        )
+        crew.kickoff()
+        return str(task.output) if task.output else ""
 
-    # Run hiring score separately
-    score_result = run_hiring_score(job_summary, resume_text)
+    tasks_to_run = [
+        ("jd", jd_agent, jd_task),
+        ("resume", resume_agent, resume_task),
+        ("message", message_agent, message_task),
+        ("company", company_agent, company_task),
+        ("interview", interview_agent, interview_task),
+    ]
+
+    outputs = {}
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        # Submit all agent task crews to the executor
+        futures = {
+            executor.submit(_run_single_agent_task, agent, task): name
+            for name, agent, task in tasks_to_run
+        }
+        
+        # Concurrently calculate the hiring score
+        hiring_score_future = executor.submit(
+            run_hiring_score, job_summary, resume_text, user_skills
+        )
+        
+        # Gather outputs for each task
+        for future in futures:
+            name = futures[future]
+            try:
+                outputs[name] = future.result()
+            except Exception as e:
+                logger.error("Error running agent task %s: %s", name, e)
+                outputs[name] = f"Error during analysis: {str(e)}"
+                
+        # Gather hiring score result
+        try:
+            score_result = hiring_score_future.result()
+        except Exception as e:
+            logger.error("Error calculating hiring score: %s", e)
+            score_result = {"score": 50, "reasoning": f"Error running hiring score: {str(e)}"}
 
     return {
-        "jd_summary": jd_output,
-        "resume_tweaks": resume_output,
-        "cover_letter": message_output,
-        "company_profile": company_output,
-        "interview_prep": interview_output,
+        "jd_summary": outputs.get("jd", ""),
+        "resume_tweaks": outputs.get("resume", ""),
+        "cover_letter": outputs.get("message", ""),
+        "company_profile": outputs.get("company", ""),
+        "interview_prep": outputs.get("interview", ""),
         "hiring_score": score_result["score"],
         "hiring_score_reasoning": score_result["reasoning"],
     }
