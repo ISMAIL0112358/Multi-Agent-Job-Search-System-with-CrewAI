@@ -116,3 +116,8 @@ class DashboardStats(BaseModel):
     max_jds: int
     max_screenings: int
     screenings_count: int
+
+class TaskResponse(BaseModel):
+    task_id: str
+    status: str
+

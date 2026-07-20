@@ -25,29 +25,29 @@ class FixedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
     def embed_documents(self, texts, **kwargs):
         kwargs['output_dimensionality'] = 768
         try:
-            self.model = "models/text-embedding-004"
+            self.model = "models/gemini-embedding-2"
             return super().embed_documents(texts, **kwargs)
         except Exception as e:
-            logger.warning("Primary embedding model models/text-embedding-004 failed: %s. Falling back to models/embedding-001...", e)
+            logger.warning("Primary embedding model models/gemini-embedding-2 failed: %s. Falling back to models/gemini-embedding-001...", e)
             try:
-                self.model = "models/embedding-001"
+                self.model = "models/gemini-embedding-001"
                 return super().embed_documents(texts, **kwargs)
             except Exception as ex:
-                logger.error("Fallback embedding model models/embedding-001 also failed: %s", ex)
+                logger.error("Fallback embedding model models/gemini-embedding-001 also failed: %s", ex)
                 raise ex
 
     def embed_query(self, text, **kwargs):
         kwargs['output_dimensionality'] = 768
         try:
-            self.model = "models/text-embedding-004"
+            self.model = "models/gemini-embedding-2"
             return super().embed_query(text, **kwargs)
         except Exception as e:
-            logger.warning("Primary embedding model models/text-embedding-004 failed: %s. Falling back to models/embedding-001...", e)
+            logger.warning("Primary embedding model models/gemini-embedding-2 failed: %s. Falling back to models/gemini-embedding-001...", e)
             try:
-                self.model = "models/embedding-001"
+                self.model = "models/gemini-embedding-001"
                 return super().embed_query(text, **kwargs)
             except Exception as ex:
-                logger.error("Fallback embedding model models/embedding-001 also failed: %s", ex)
+                logger.error("Fallback embedding model models/gemini-embedding-001 also failed: %s", ex)
                 raise ex
 
 
@@ -65,7 +65,7 @@ class VectorService:
             )
         else:
             self._embeddings = FixedGoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004",
+                model="models/gemini-embedding-2",
                 google_api_key=settings.GEMINI_API_KEY,
             )
 

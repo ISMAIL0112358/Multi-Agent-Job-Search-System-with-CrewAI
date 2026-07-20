@@ -11,11 +11,13 @@ from backend.models.conversation import Conversation, Message
 from backend.schemas.job import JobAnalysisRequest, JobAnalysisResponse
 from backend.services.agent_service import run_full_analysis
 from backend.services.storage_service import save_cover_letter, save_generated_resume
+from backend.tasks import run_crewai_analysis_task
+from backend.schemas.hr import TaskResponse
 
 router = APIRouter(prefix="/conversations", tags=["Agents"])
 
 
-@router.post("/{conversation_id}/analyze-job", response_model=JobAnalysisResponse)
+@router.post("/{conversation_id}/analyze-job", response_model=TaskResponse)
 def analyze_job(
     conversation_id: str,
     body: JobAnalysisRequest,
@@ -38,48 +40,14 @@ def analyze_job(
             detail="Please upload a resume first.",
         )
 
-    # Run the full analysis pipeline
-    try:
-        result = run_full_analysis(body.job_data, convo.resume_text, body.user_bio, current_user.skills)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent pipeline failed: {str(e)}",
-        )
-
-    # Save generated documents to user's folders
-    job_title = body.job_data.get("PositionTitle", body.job_data.get("position_title", "Unknown"))
-
-    if result["cover_letter"]:
-        save_cover_letter(current_user.id, job_title, result["cover_letter"])
-
-    if result["resume_tweaks"]:
-        save_generated_resume(current_user.id, job_title, result["resume_tweaks"])
-
-    # Save as conversation messages
-    assistant_msg = Message(
-        conversation_id=conversation_id,
-        role="assistant",
-        content=json.dumps({
-            "jd_summary": result["jd_summary"],
-            "resume_tweaks": result["resume_tweaks"],
-            "cover_letter": result["cover_letter"],
-            "company_profile": result["company_profile"],
-            "interview_prep": result["interview_prep"],
-            "hiring_score": result["hiring_score"],
-            "hiring_score_reasoning": result["hiring_score_reasoning"],
-        }),
-        metadata_={
-            "type": "job_analysis",
-            "job_title": job_title,
-        },
+    task = run_crewai_analysis_task.delay(
+        current_user.id,
+        conversation_id,
+        body.job_data,
+        body.user_bio
     )
-    db.add(assistant_msg)
 
-    convo.updated_at = datetime.now(timezone.utc)
-    db.commit()
-
-    return JobAnalysisResponse(**result)
+    return TaskResponse(task_id=task.id, status="Processing job analysis")
 
 
 from backend.schemas.chat import ChatRequest, ChatResponse

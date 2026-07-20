@@ -63,8 +63,9 @@ class Settings(BaseSettings):
     LOCAL_LLM_MODEL: str = os.getenv("LOCAL_LLM_MODEL") or "gemma4"
     LOCAL_EMBEDDING_MODEL: str = os.getenv("LOCAL_EMBEDDING_MODEL") or "embeddinggemma"
 
-    # Database
+    # Database & Cache
     DATABASE_URL: str = "sqlite:///./data/app.db"
+    REDIS_URL: str = os.getenv("REDIS_URL") or "redis://localhost:6379/0"
 
     # File Storage
     DATA_DIR: str = "data"

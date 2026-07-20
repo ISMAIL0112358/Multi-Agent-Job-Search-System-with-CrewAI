@@ -6,7 +6,7 @@ import Loader from './Loader';
 import { useAuth } from '../contexts/AuthContext';
 import './JobDetailPanel.css';
 
-export default function JobDetailPanel({ job, conversationId, messages = [], onClose }) {
+export default function JobDetailPanel({ job, conversationId, messages = [], onAnalysisComplete, onClose }) {
   const { user } = useAuth();
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -42,6 +42,19 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onC
     }
   }, [job, messages]);
 
+  // Task Polling
+  const pollTaskStatus = (taskId, onSuccess, onError) => {
+    client.get(`/tasks/${taskId}`).then((res) => {
+      if (res.data.state === 'SUCCESS') {
+        onSuccess();
+      } else if (res.data.state === 'FAILURE') {
+        onError(new Error(res.data.error || 'Task failed'));
+      } else {
+        setTimeout(() => pollTaskStatus(taskId, onSuccess, onError), 2000);
+      }
+    }).catch(onError);
+  };
+
   const runAnalysis = async () => {
     setLoading(true);
     setError(null);
@@ -50,11 +63,28 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onC
         job_data: job.raw_data || job,
         user_bio: 'I am a professional looking for new opportunities.',
       });
-      setAnalysis(res.data);
-      setActiveTab('resume');
+      
+      if (res.data.task_id) {
+        pollTaskStatus(
+          res.data.task_id,
+          () => {
+            // Task is completed, we need to fetch the conversation to get the latest messages
+            if (onAnalysisComplete) {
+              onAnalysisComplete();
+            }
+          },
+          (err) => {
+            setError(err.message || 'Analysis failed');
+            setLoading(false);
+          }
+        );
+      } else {
+        setAnalysis(res.data);
+        setActiveTab('resume');
+        setLoading(false);
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Analysis failed');
-    } finally {
       setLoading(false);
     }
   };
