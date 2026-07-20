@@ -301,27 +301,47 @@ export default function HRDashboardPage() {
       <div className="bg-ambient" />
       <Navbar />
       <div className="hr-dashboard__content">
+        {/* ── Beta Welcome / Info Banner ──────────────────── */}
+        <div className="hr-beta-banner glass" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '12px 20px',
+          borderRadius: '12px',
+          marginBottom: '24px',
+          background: 'rgba(99, 102, 241, 0.05)',
+          border: '1px solid rgba(99, 102, 241, 0.15)',
+          fontSize: '0.88rem',
+          color: '#c7d2fe',
+          fontWeight: '500',
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>🚀</span>
+          <span>
+            <strong>Welcome to the Beta version!</strong> We have pre-configured a generous amount of free interactions for each feature on this site (listed below). If you're enjoying the platform and need to upgrade your limits, just connect at <a href="mailto:ismail.taibani786@gmail.com" style={{ color: '#818cf8', textDecoration: 'underline', fontWeight: '600' }}>ismail.taibani786@gmail.com</a>.
+          </span>
+        </div>
+
         {/* ── Stats Header ──────────────────── */}
         <div className="hr-stats">
           <div className="hr-stat-card glass">
             <span className="hr-stat-icon">👥</span>
             <div className="hr-stat-info">
               <span className="hr-stat-value">{stats.total_candidates} / {stats.max_resumes || 50}</span>
-              <span className="hr-stat-label">Candidates</span>
+              <span className="hr-stat-label">candidates upload used</span>
             </div>
           </div>
           <div className="hr-stat-card glass">
             <span className="hr-stat-icon">📋</span>
             <div className="hr-stat-info">
               <span className="hr-stat-value">{stats.open_positions} / {stats.max_jds || 10}</span>
-              <span className="hr-stat-label">Open Positions</span>
+              <span className="hr-stat-label">job descriptions created used</span>
             </div>
           </div>
           <div className="hr-stat-card glass">
             <span className="hr-stat-icon">🎯</span>
             <div className="hr-stat-info">
               <span className="hr-stat-value">{stats.screenings_count || 0} / {stats.max_screenings || 50}</span>
-              <span className="hr-stat-label">Screenings Run</span>
+              <span className="hr-stat-label">screenings run used</span>
             </div>
           </div>
           <div className="hr-stat-card glass">
