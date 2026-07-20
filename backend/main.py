@@ -22,6 +22,28 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created.")
 
+    # Ensure user limit columns exist (Alters existing table for schema updates)
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        for col, default_val in [
+            ("max_resumes", 50),
+            ("resumes_count", 0),
+            ("max_jds", 10),
+            ("jds_count", 0),
+            ("max_screenings", 50),
+            ("screenings_count", 0),
+            ("max_conversations", 10),
+            ("conversations_count", 0),
+            ("max_messages_per_conversation", 50)
+        ]:
+            try:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} INTEGER DEFAULT {default_val} NOT NULL;"))
+                conn.commit()
+                logger.info(f"Added column {col} to users table.")
+            except Exception:
+                # Column already exists or table does not support it, ignore
+                pass
+
     # Ensure ChromaDB persist directory exists
     import os
     from backend.config import settings

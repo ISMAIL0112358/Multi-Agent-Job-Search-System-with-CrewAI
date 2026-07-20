@@ -81,12 +81,17 @@ class ScreeningService:
             if model_name.startswith("gemini/"):
                 model_name = model_name[len("gemini/"):]
 
-            self._llm = ChatGoogleGenerativeAI(
-                model=model_name,
+            primary = ChatGoogleGenerativeAI(
+                model="gemini-3.1-flash-lite",
                 google_api_key=settings.GEMINI_API_KEY,
                 temperature=0.2,
                 callbacks=callbacks,
             )
+            fallbacks = [
+                ChatGoogleGenerativeAI(model=m, google_api_key=settings.GEMINI_API_KEY, temperature=0.2, callbacks=callbacks)
+                for m in ["gemini-3-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash"]
+            ]
+            self._llm = primary.with_fallbacks(fallbacks)
 
         self._vector_service = vector_service or VectorService.get_instance()
 

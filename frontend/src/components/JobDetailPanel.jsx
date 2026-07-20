@@ -3,9 +3,11 @@ import ReactMarkdown from 'react-markdown';
 import client from '../api/client';
 import HiringScoreBadge from './HiringScoreBadge';
 import Loader from './Loader';
+import { useAuth } from '../contexts/AuthContext';
 import './JobDetailPanel.css';
 
 export default function JobDetailPanel({ job, conversationId, messages = [], onClose }) {
+  const { user } = useAuth();
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -16,6 +18,8 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onC
   const [chatHistory, setChatHistory] = useState([]);
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
+
+  const followUpCount = (messages || []).filter(m => m.role === 'user' && m.metadata_?.type === 'followup_question').length + chatHistory.filter(h => h.role === 'user').length;
 
   // Check for existing analysis
   useEffect(() => {
@@ -137,7 +141,7 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onC
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
               </svg>
-              Analyze & Generate
+              Analyze & Generate (Limit: {user?.max_jds || 10} JDs)
             </button>
             {error && <p className="job-detail-error">{error}</p>}
           </div>
@@ -211,7 +215,9 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onC
             
             {/* Follow-up Chat Interface */}
             <div className="job-detail-chat">
-              <h4 className="job-detail-chat-title">Ask Follow-up Questions</h4>
+              <h4 className="job-detail-chat-title">
+                Ask Follow-up Questions ({followUpCount} / {user?.max_messages_per_conversation || 50} used)
+              </h4>
               
               <div className="job-detail-chat-history">
                 {chatHistory.map((msg, idx) => (
@@ -233,20 +239,26 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onC
                 <div ref={chatEndRef} />
               </div>
               
-              <form onSubmit={sendChatMessage} className="job-detail-chat-form">
-                <input
-                  type="text"
-                  placeholder="Ask a question about this job..."
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  disabled={chatLoading}
-                />
-                <button type="submit" className="btn btn-primary btn-icon" disabled={!chatMessage.trim() || chatLoading}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                  </svg>
-                </button>
+              <form onSubmit={sendChatMessage} className="job-detail-chat-form" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', width: '100%' }}>
+                  <input
+                    type="text"
+                    placeholder={`Ask a question... (Limit: ${followUpCount} / ${user?.max_messages_per_conversation || 50} used)`}
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
+                    disabled={chatLoading}
+                    style={{ flex: 1, marginRight: '10px' }}
+                  />
+                  <button type="submit" className="btn btn-primary btn-icon" disabled={!chatMessage.trim() || chatLoading}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="22" y1="2" x2="11" y2="13"></line>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                  </button>
+                </div>
+                <span className="chat-limit-helper" style={{ fontSize: '0.72rem', opacity: 0.6, marginTop: '5px', textAlign: 'left', display: 'block' }}>
+                  * UAT Safeguard Limit: {followUpCount} of {user?.max_messages_per_conversation || 50} questions used.
+                </span>
               </form>
             </div>
 

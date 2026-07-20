@@ -21,7 +21,7 @@ export default function LoginPage() {
               </defs>
             </svg>
           </div>
-          <h1 className="login-title">AI Job Hunt & Recruitment Assistant</h1>
+          <h1 className="login-title">AI Job Hunt & Recruitment Assistant (Beta)</h1>
           <p className="login-subtitle">
             An AI-driven job hunt and talent recruitment platform using cooperative CrewAI agents to assist both candidates and HR personnel.
           </p>
@@ -87,12 +87,60 @@ export default function LoginPage() {
         <p className="login-disclaimer">
           Sign in securely with your Google account • Same account can be used for both roles
         </p>
+
+        <div style={{ marginTop: '24px', fontSize: '0.85rem', opacity: 0.8 }}>
+          Created by <a href="https://www.linkedin.com/in/ismailtaibani/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary, #6366f1)', textDecoration: 'underline', fontWeight: 'bold' }}>Ismail Taibani</a> (<a href="https://www.linkedin.com/in/ismailtaibani/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary, #6366f1)', textDecoration: 'underline' }}>About Me</a>)
+        </div>
       </div>
 
       {/* Floating orbs for visual depth */}
       <div className="login-orb login-orb-1" />
       <div className="login-orb login-orb-2" />
       <div className="login-orb login-orb-3" />
+
+      {/* Developer Profile Link Badge */}
+      <a 
+        href="https://www.linkedin.com/in/ismailtaibani/" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="dev-badge glass"
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '10px 20px',
+          borderRadius: '50px',
+          fontSize: '0.85rem',
+          fontWeight: '600',
+          color: '#ffffff',
+          textDecoration: 'none',
+          zIndex: 1000,
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          background: 'rgba(255, 255, 255, 0.05)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)',
+          transition: 'all 0.3s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+          e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.5)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'transform 0.3s ease' }}>
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <span>About Developer</span>
+      </a>
     </div>
   );
 }

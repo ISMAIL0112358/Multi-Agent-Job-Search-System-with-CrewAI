@@ -112,3 +112,7 @@ class DashboardStats(BaseModel):
     open_positions: int
     shortlisted: int
     hired: int
+    max_resumes: int
+    max_jds: int
+    max_screenings: int
+    screenings_count: int

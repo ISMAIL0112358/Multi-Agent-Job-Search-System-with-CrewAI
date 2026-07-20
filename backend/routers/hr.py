@@ -56,6 +56,7 @@ def _process_single_resume(
     vector_service: VectorService,
     current_user: User,
     db: Session,
+    candidate_id: str | None = None,
 ) -> CandidateUploadResponse | None:
     """Process a single resume text into a Candidate record.
 
@@ -72,7 +73,8 @@ def _process_single_resume(
         logger.warning("Failed to extract candidate info from %s: %s", source_label, e)
         candidate_info = {"name": source_label, "email": "", "phone": ""}
 
-    candidate_id = str(uuid.uuid4())
+    if not candidate_id:
+        candidate_id = str(uuid.uuid4())
     candidate = Candidate(
         id=candidate_id,
         name=candidate_info.get("name", "Unknown"),
@@ -115,16 +117,26 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
 ):
     """Get aggregate stats for the HR dashboard header."""
-    total_candidates = db.query(Candidate).count()
-    open_positions = db.query(JobDescription).filter(JobDescription.status == "open").count()
-    shortlisted = db.query(Candidate).filter(Candidate.status == "shortlisted").count()
-    hired = db.query(Candidate).filter(Candidate.status == "hired").count()
+    total_candidates = current_user.resumes_count
+    open_positions = current_user.jds_count
+    shortlisted = db.query(Candidate).filter(
+        Candidate.uploaded_by == current_user.id,
+        Candidate.status == "shortlisted"
+    ).count()
+    hired = db.query(Candidate).filter(
+        Candidate.uploaded_by == current_user.id,
+        Candidate.status == "hired"
+    ).count()
 
     return DashboardStats(
         total_candidates=total_candidates,
         open_positions=open_positions,
         shortlisted=shortlisted,
         hired=hired,
+        max_resumes=current_user.max_resumes,
+        max_jds=current_user.max_jds,
+        max_screenings=current_user.max_screenings,
+        screenings_count=current_user.screenings_count,
     )
 
 
@@ -142,6 +154,13 @@ async def upload_candidates(
 
     **PDF**: Each file is parsed via PyMuPDF to extract text.
     """
+    # Enforce upload limit safeguard
+    if current_user.resumes_count + len(files) > current_user.max_resumes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Upload limit exceeded. You can upload up to {current_user.max_resumes} resumes (Current: {current_user.resumes_count})."
+        )
+
     results = []
     vector_service = VectorService.get_instance()
     screening_service = ScreeningService(vector_service)
@@ -166,7 +185,8 @@ async def upload_candidates(
             logger.error("Failed to extract text from %s: %s", file.filename, e)
             continue
 
-        save_candidate_resume("pdf_" + str(uuid.uuid4())[:8], file.filename, file_bytes)
+        candidate_id = str(uuid.uuid4())
+        save_candidate_resume(candidate_id, file.filename, file_bytes)
 
         result = _process_single_resume(
             resume_text=resume_text,
@@ -176,6 +196,7 @@ async def upload_candidates(
             vector_service=vector_service,
             current_user=current_user,
             db=db,
+            candidate_id=candidate_id,
         )
         if result:
             results.append(result)
@@ -185,6 +206,10 @@ async def upload_candidates(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid resumes were found in the uploaded files. Supported: PDF.",
         )
+
+    # Increment historical uploads count
+    current_user.resumes_count += len(results)
+    db.commit()
 
     return results
 
@@ -198,7 +223,7 @@ def list_candidates(
     db: Session = Depends(get_db),
 ):
     """List all candidates, optionally filtered by status."""
-    query = db.query(Candidate)
+    query = db.query(Candidate).filter(Candidate.uploaded_by == current_user.id)
     if status_filter:
         query = query.filter(Candidate.status == status_filter)
     query = query.order_by(Candidate.created_at.desc())
@@ -215,7 +240,7 @@ def get_candidate(
     db: Session = Depends(get_db),
 ):
     """Get full details for a single candidate."""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
     return CandidateDetail.model_validate(candidate)
@@ -228,7 +253,7 @@ def download_candidate_resume(
     db: Session = Depends(get_db),
 ):
     """Download the candidate's original resume PDF file."""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
@@ -273,7 +298,7 @@ def update_candidate_status(
     db: Session = Depends(get_db),
 ):
     """Update a candidate's pipeline status."""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
@@ -293,7 +318,7 @@ def delete_candidate(
     db: Session = Depends(get_db),
 ):
     """Delete a candidate and their vector data."""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+    candidate = db.query(Candidate).filter(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
@@ -321,7 +346,13 @@ def create_job_description(
     current_user: User = Depends(require_hr_role),
     db: Session = Depends(get_db),
 ):
-    """Create a new Job Description."""
+    # Enforce JD limit safeguard
+    if current_user.jds_count >= current_user.max_jds:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Job description limit exceeded. You can create up to {current_user.max_jds} JDs (Current: {current_user.jds_count})."
+        )
+
     jd = JobDescription(
         title=body.title,
         description=body.description,
@@ -329,6 +360,10 @@ def create_job_description(
         created_by=current_user.id,
     )
     db.add(jd)
+    
+    # Increment historical JDs count
+    current_user.jds_count += 1
+    
     db.commit()
     db.refresh(jd)
     return JobDescriptionResponse.model_validate(jd)
@@ -341,7 +376,7 @@ def list_job_descriptions(
     db: Session = Depends(get_db),
 ):
     """List all Job Descriptions."""
-    query = db.query(JobDescription)
+    query = db.query(JobDescription).filter(JobDescription.created_by == current_user.id)
     if status_filter:
         query = query.filter(JobDescription.status == status_filter)
     jds = query.order_by(JobDescription.created_at.desc()).all()
@@ -355,7 +390,7 @@ def get_job_description(
     db: Session = Depends(get_db),
 ):
     """Get a single Job Description."""
-    jd = db.query(JobDescription).filter(JobDescription.id == jd_id).first()
+    jd = db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.created_by == current_user.id).first()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
     return JobDescriptionResponse.model_validate(jd)
@@ -369,7 +404,7 @@ def update_job_description(
     db: Session = Depends(get_db),
 ):
     """Update a Job Description."""
-    jd = db.query(JobDescription).filter(JobDescription.id == jd_id).first()
+    jd = db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.created_by == current_user.id).first()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
@@ -389,7 +424,7 @@ def delete_job_description(
     db: Session = Depends(get_db),
 ):
     """Delete a Job Description and its screening results."""
-    jd = db.query(JobDescription).filter(JobDescription.id == jd_id).first()
+    jd = db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.created_by == current_user.id).first()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
@@ -413,8 +448,15 @@ def screen_candidates(
     Uses RAG to retrieve semantically similar resumes, then LLM to score each match.
     Results are persisted in the screening_results table.
     """
+    # Enforce screening limit safeguard
+    if current_user.screenings_count >= current_user.max_screenings:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Screening limit exceeded. You can perform up to {current_user.max_screenings} screening runs (Current: {current_user.screenings_count})."
+        )
+
     # Get the JD
-    jd = db.query(JobDescription).filter(JobDescription.id == body.job_description_id).first()
+    jd = db.query(JobDescription).filter(JobDescription.id == body.job_description_id, JobDescription.created_by == current_user.id).first()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
@@ -423,7 +465,7 @@ def screen_candidates(
     screening_service = ScreeningService(vector_service)
 
     # Build a map of candidate_id → full resume text for accurate scoring
-    all_candidates = db.query(Candidate).all()
+    all_candidates = db.query(Candidate).filter(Candidate.uploaded_by == current_user.id).all()
     candidate_resumes = {c.id: c.resume_text for c in all_candidates}
 
     try:
@@ -445,7 +487,7 @@ def screen_candidates(
     # Persist results
     response_results = []
     for raw in raw_results:
-        candidate = db.query(Candidate).filter(Candidate.id == raw["candidate_id"]).first()
+        candidate = db.query(Candidate).filter(Candidate.id == raw["candidate_id"], Candidate.uploaded_by == current_user.id).first()
         if not candidate:
             continue
 
@@ -467,6 +509,8 @@ def screen_candidates(
             created_at=screening_result.created_at,
         ))
 
+    # Increment screening run count
+    current_user.screenings_count += 1
     db.commit()
     logger.info("Screening complete: %d results for JD %s", len(response_results), jd.id)
     return response_results
@@ -479,7 +523,7 @@ def get_screening_results(
     db: Session = Depends(get_db),
 ):
     """Get saved screening results for a Job Description."""
-    jd = db.query(JobDescription).filter(JobDescription.id == jd_id).first()
+    jd = db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.created_by == current_user.id).first()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
@@ -492,7 +536,7 @@ def get_screening_results(
 
     response = []
     for r in results:
-        candidate = db.query(Candidate).filter(Candidate.id == r.candidate_id).first()
+        candidate = db.query(Candidate).filter(Candidate.id == r.candidate_id, Candidate.uploaded_by == current_user.id).first()
         if candidate:
             response.append(ScreeningResultResponse(
                 id=r.id,
@@ -522,11 +566,11 @@ def generate_vetting_questions(
     and detect potential misrepresentation. Results are saved to the
     screening_result record.
     """
-    candidate = db.query(Candidate).filter(Candidate.id == body.candidate_id).first()
+    candidate = db.query(Candidate).filter(Candidate.id == body.candidate_id, Candidate.uploaded_by == current_user.id).first()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
-    jd = db.query(JobDescription).filter(JobDescription.id == body.job_description_id).first()
+    jd = db.query(JobDescription).filter(JobDescription.id == body.job_description_id, JobDescription.created_by == current_user.id).first()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 

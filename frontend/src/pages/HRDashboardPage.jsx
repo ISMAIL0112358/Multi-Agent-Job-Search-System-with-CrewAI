@@ -306,15 +306,22 @@ export default function HRDashboardPage() {
           <div className="hr-stat-card glass">
             <span className="hr-stat-icon">👥</span>
             <div className="hr-stat-info">
-              <span className="hr-stat-value">{stats.total_candidates}</span>
+              <span className="hr-stat-value">{stats.total_candidates} / {stats.max_resumes || 50}</span>
               <span className="hr-stat-label">Candidates</span>
             </div>
           </div>
           <div className="hr-stat-card glass">
             <span className="hr-stat-icon">📋</span>
             <div className="hr-stat-info">
-              <span className="hr-stat-value">{stats.open_positions}</span>
+              <span className="hr-stat-value">{stats.open_positions} / {stats.max_jds || 10}</span>
               <span className="hr-stat-label">Open Positions</span>
+            </div>
+          </div>
+          <div className="hr-stat-card glass">
+            <span className="hr-stat-icon">🎯</span>
+            <div className="hr-stat-info">
+              <span className="hr-stat-value">{stats.screenings_count || 0} / {stats.max_screenings || 50}</span>
+              <span className="hr-stat-label">Screenings Run</span>
             </div>
           </div>
           <div className="hr-stat-card glass">
@@ -466,7 +473,7 @@ export default function HRDashboardPage() {
         {/* ════════════════════════════════════ */}
         {activeTab === 'jds' && (
           <div className="hr-tab-content animate-fade-in">
-            <JDForm onSubmit={handleCreateJD} loading={jdCreating} />
+            <JDForm onSubmit={handleCreateJD} loading={jdCreating} currentJdsCount={jds.length} maxJds={stats.max_jds || 10} />
 
             {jdsLoading ? (
               <Loader message="Loading job descriptions..." />
@@ -496,7 +503,7 @@ export default function HRDashboardPage() {
                         disabled={jd.status === 'closed' || candidates.length === 0}
                         id={`screen-btn-${jd.id}`}
                       >
-                        🎯 Screen Candidates
+                        🎯 Screen Candidates (Limit: {stats.screenings_count || 0} / {stats.max_screenings || 50})
                       </button>
                       <button
                         className="btn btn-secondary"
@@ -575,7 +582,7 @@ export default function HRDashboardPage() {
                 {screeningLoading ? (
                   <><span className="spinner" /> Screening...</>
                 ) : (
-                  '🔄 Re-Screen'
+                  `🔄 Re-Screen (Limit: ${stats.screenings_count || 0} / ${stats.max_screenings || 50})`
                 )}
               </button>
             </div>
