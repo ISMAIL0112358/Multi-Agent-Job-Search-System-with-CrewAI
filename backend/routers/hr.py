@@ -177,6 +177,11 @@ async def upload_candidates(
         if len(file_bytes) == 0:
             logger.warning("Skipping empty file: %s", file.filename)
             continue
+        if len(file_bytes) > 20 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File '{file.filename}' exceeds the 20MB limit."
+            )
 
         # ── PDF Upload ───────────────────────────────────────
         try:
