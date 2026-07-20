@@ -117,11 +117,8 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
 ):
     """Get aggregate stats for the HR dashboard header."""
-    total_candidates = db.query(Candidate).filter(Candidate.uploaded_by == current_user.id).count()
-    open_positions = db.query(JobDescription).filter(
-        JobDescription.created_by == current_user.id,
-        JobDescription.status == "open"
-    ).count()
+    total_candidates = current_user.resumes_count
+    open_positions = current_user.jds_count
     shortlisted = db.query(Candidate).filter(
         Candidate.uploaded_by == current_user.id,
         Candidate.status == "shortlisted"
@@ -136,6 +133,10 @@ def get_dashboard_stats(
         open_positions=open_positions,
         shortlisted=shortlisted,
         hired=hired,
+        max_resumes=current_user.max_resumes,
+        max_jds=current_user.max_jds,
+        max_screenings=current_user.max_screenings,
+        screenings_count=current_user.screenings_count,
     )
 
 
@@ -153,6 +154,13 @@ async def upload_candidates(
 
     **PDF**: Each file is parsed via PyMuPDF to extract text.
     """
+    # Enforce upload limit safeguard
+    if current_user.resumes_count + len(files) > current_user.max_resumes:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Upload limit exceeded. You can upload up to {current_user.max_resumes} resumes (Current: {current_user.resumes_count})."
+        )
+
     results = []
     vector_service = VectorService.get_instance()
     screening_service = ScreeningService(vector_service)
@@ -198,6 +206,10 @@ async def upload_candidates(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid resumes were found in the uploaded files. Supported: PDF.",
         )
+
+    # Increment historical uploads count
+    current_user.resumes_count += len(results)
+    db.commit()
 
     return results
 
@@ -334,7 +346,13 @@ def create_job_description(
     current_user: User = Depends(require_hr_role),
     db: Session = Depends(get_db),
 ):
-    """Create a new Job Description."""
+    # Enforce JD limit safeguard
+    if current_user.jds_count >= current_user.max_jds:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Job description limit exceeded. You can create up to {current_user.max_jds} JDs (Current: {current_user.jds_count})."
+        )
+
     jd = JobDescription(
         title=body.title,
         description=body.description,
@@ -342,6 +360,10 @@ def create_job_description(
         created_by=current_user.id,
     )
     db.add(jd)
+    
+    # Increment historical JDs count
+    current_user.jds_count += 1
+    
     db.commit()
     db.refresh(jd)
     return JobDescriptionResponse.model_validate(jd)
@@ -426,6 +448,13 @@ def screen_candidates(
     Uses RAG to retrieve semantically similar resumes, then LLM to score each match.
     Results are persisted in the screening_results table.
     """
+    # Enforce screening limit safeguard
+    if current_user.screenings_count >= current_user.max_screenings:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Screening limit exceeded. You can perform up to {current_user.max_screenings} screening runs (Current: {current_user.screenings_count})."
+        )
+
     # Get the JD
     jd = db.query(JobDescription).filter(JobDescription.id == body.job_description_id, JobDescription.created_by == current_user.id).first()
     if not jd:
@@ -480,6 +509,8 @@ def screen_candidates(
             created_at=screening_result.created_at,
         ))
 
+    # Increment screening run count
+    current_user.screenings_count += 1
     db.commit()
     logger.info("Screening complete: %d results for JD %s", len(response_results), jd.id)
     return response_results

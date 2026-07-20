@@ -101,8 +101,16 @@ def chat_followup(
         .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
         .first()
     )
-    if not convo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    # Enforce follow-up messages limit check
+    user_messages_count = db.query(Message).filter(
+        Message.conversation_id == conversation_id,
+        Message.role == "user"
+    ).count()
+    if user_messages_count >= current_user.max_messages_per_conversation:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Follow-up limit exceeded. You can ask up to {current_user.max_messages_per_conversation} follow-up questions per conversation (Current: {user_messages_count})."
+        )
 
     # Use LangChain to query the model directly
     try:

@@ -18,7 +18,7 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor — handle 401
+// Response interceptor — handle 401 & 403
 client.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -26,6 +26,11 @@ client.interceptors.response.use(
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+    } else if (error.response?.status === 403) {
+      const detail = error.response.data?.detail || '';
+      if (detail.toLowerCase().includes('limit')) {
+        alert("Limit reached! For extended limit, contact ismail.taibani786@gmail.com");
+      }
     }
     return Promise.reject(error);
   }

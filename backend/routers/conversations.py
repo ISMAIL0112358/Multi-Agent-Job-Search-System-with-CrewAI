@@ -36,12 +36,22 @@ def create_conversation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a new conversation."""
+    # Enforce conversation limit safeguard
+    if current_user.conversations_count >= current_user.max_conversations:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Conversation limit exceeded. You can create up to {current_user.max_conversations} conversations (Current: {current_user.conversations_count})."
+        )
+
     convo = Conversation(
         user_id=current_user.id,
         title=body.title or "New Conversation",
     )
     db.add(convo)
+    
+    # Increment historical conversations count
+    current_user.conversations_count += 1
+    
     db.commit()
     db.refresh(convo)
     return ConversationDetail.model_validate(convo)

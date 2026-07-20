@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './JDForm.css';
 
-export default function JDForm({ onSubmit, loading }) {
+export default function JDForm({ onSubmit, loading, currentJdsCount = 0, maxJds = 10 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [department, setDepartment] = useState('');
@@ -68,7 +68,7 @@ export default function JDForm({ onSubmit, loading }) {
             <span className="spinner" /> Creating...
           </>
         ) : (
-          '+ Create Job Description'
+          `+ Create Job Description (Limit: ${currentJdsCount} / ${maxJds} used)`
         )}
       </button>
     </form>

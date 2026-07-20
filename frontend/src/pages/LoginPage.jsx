@@ -21,7 +21,7 @@ export default function LoginPage() {
               </defs>
             </svg>
           </div>
-          <h1 className="login-title">AI Job Hunt & Recruitment Assistant</h1>
+          <h1 className="login-title">AI Job Hunt & Recruitment Assistant (Beta)</h1>
           <p className="login-subtitle">
             An AI-driven job hunt and talent recruitment platform using cooperative CrewAI agents to assist both candidates and HR personnel.
           </p>

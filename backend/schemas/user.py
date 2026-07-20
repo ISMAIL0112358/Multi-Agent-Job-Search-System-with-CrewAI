@@ -13,6 +13,17 @@ class UserResponse(BaseModel):
     role: str = "job_seeker"
     created_at: datetime
 
+    # UAT limits mapping
+    max_resumes: int = 50
+    resumes_count: int = 0
+    max_jds: int = 10
+    jds_count: int = 0
+    max_screenings: int = 50
+    screenings_count: int = 0
+    max_conversations: int = 10
+    conversations_count: int = 0
+    max_messages_per_conversation: int = 50
+
     class Config:
         from_attributes = True
 
