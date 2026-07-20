@@ -52,6 +52,8 @@ async def upload_independent_resume(
     file_bytes = await file.read()
     if len(file_bytes) == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+    if len(file_bytes) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size exceeds the 20MB limit")
 
     try:
         resume_text = extract_text_from_pdf(file_bytes)
@@ -94,6 +96,8 @@ async def upload_resume(
     file_bytes = await file.read()
     if len(file_bytes) == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+    if len(file_bytes) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size exceeds the 20MB limit")
 
     # Extract text from PDF
     try:
