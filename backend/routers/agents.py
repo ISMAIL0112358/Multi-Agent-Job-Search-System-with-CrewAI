@@ -126,16 +126,17 @@ def chat_followup(
                 callbacks=callbacks,
             )
         else:
-            # Check if the model name is set correctly, some Langchain versions require google/ prefix, some do not
-            # We will use the model name from settings but strip any "gemini/" prefix if present as Langchain handles it
-            model_name = settings.GEMINI_MODEL_NAME.replace("gemini/", "") if settings.GEMINI_MODEL_NAME.startswith("gemini/") else settings.GEMINI_MODEL_NAME
-            
-            llm = ChatGoogleGenerativeAI(
-                model=model_name,
+            primary = ChatGoogleGenerativeAI(
+                model="gemini-3.1-flash-lite",
                 google_api_key=settings.GEMINI_API_KEY,
                 temperature=0.3,
                 callbacks=callbacks,
             )
+            fallbacks = [
+                ChatGoogleGenerativeAI(model=m, google_api_key=settings.GEMINI_API_KEY, temperature=0.3, callbacks=callbacks)
+                for m in ["gemini-3-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash"]
+            ]
+            llm = primary.with_fallbacks(fallbacks)
         
         from langchain_core.messages import HumanMessage, SystemMessage
         
