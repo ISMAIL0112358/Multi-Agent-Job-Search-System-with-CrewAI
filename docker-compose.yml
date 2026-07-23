@@ -12,6 +12,27 @@ services:
     env_file:
       - .env
     restart: always
+    depends_on:
+      - redis
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: celery -A backend.celery_app.celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    restart: always
 
   frontend:
     build:

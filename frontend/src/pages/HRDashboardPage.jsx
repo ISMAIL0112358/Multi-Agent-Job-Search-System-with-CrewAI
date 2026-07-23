@@ -33,6 +33,19 @@ export default function HRDashboardPage() {
   const [topN, setTopN] = useState(10);
   const [vettingLoading, setVettingLoading] = useState({});
 
+  // Task Polling
+  const pollTaskStatus = useCallback((taskId, onSuccess, onError) => {
+    client.get(`/tasks/${taskId}`).then((res) => {
+      if (res.data.state === 'SUCCESS') {
+        onSuccess(res.data.result);
+      } else if (res.data.state === 'FAILURE') {
+        onError(new Error(res.data.error || 'Task failed'));
+      } else {
+        setTimeout(() => pollTaskStatus(taskId, onSuccess, onError), 2000);
+      }
+    }).catch(onError);
+  }, []);
+
   // ── Fetch data ──────────────────────────────────────────────
 
   const fetchStats = useCallback(async () => {
@@ -82,15 +95,32 @@ export default function HRDashboardPage() {
     try {
       const formData = new FormData();
       Array.from(files).forEach((f) => formData.append('files', f));
-      await client.post('/hr/candidates/upload', formData, {
+      const res = await client.post('/hr/candidates/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      fetchCandidates();
-      fetchStats();
+      
+      if (res.data.task_id) {
+        pollTaskStatus(
+          res.data.task_id,
+          (result) => {
+            fetchCandidates();
+            fetchStats();
+            setUploading(false);
+          },
+          (error) => {
+            console.error('Upload task failed:', error);
+            alert(error.message || 'Upload task failed');
+            setUploading(false);
+          }
+        );
+      } else {
+        fetchCandidates();
+        fetchStats();
+        setUploading(false);
+      }
     } catch (err) {
       console.error('Upload failed:', err);
       alert(err.response?.data?.detail || 'Upload failed');
-    } finally {
       setUploading(false);
     }
   };
@@ -178,11 +208,27 @@ export default function HRDashboardPage() {
         job_description_id: jdId,
         top_n: topN,
       });
-      setScreeningResults(res.data);
+      
+      if (res.data.task_id) {
+        pollTaskStatus(
+          res.data.task_id,
+          (result) => {
+            handleLoadResults(jdId);
+            setScreeningLoading(false);
+          },
+          (error) => {
+            console.error('Screening task failed:', error);
+            alert(error.message || 'Screening task failed');
+            setScreeningLoading(false);
+          }
+        );
+      } else {
+        setScreeningResults(res.data);
+        setScreeningLoading(false);
+      }
     } catch (err) {
       console.error('Screening failed:', err);
       alert(err.response?.data?.detail || 'Screening failed');
-    } finally {
       setScreeningLoading(false);
     }
   };

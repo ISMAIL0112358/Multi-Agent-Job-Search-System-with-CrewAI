@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.database import Base, engine
 from backend.middleware.agentops import init_agentops
-from backend.routers import auth, conversations, resume, jobs, agents, hr
+from backend.routers import auth, conversations, resume, jobs, agents, hr, tasks
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -87,6 +87,7 @@ app.include_router(resume.user_resumes_router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(hr.router, prefix="/api")
+app.include_router(tasks.router, prefix="/api")
 
 
 @app.get("/api/health")

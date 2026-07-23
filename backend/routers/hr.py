@@ -35,7 +35,9 @@ from backend.schemas.hr import (
     VettingRequest,
     VettingQuestionResponse,
     DashboardStats,
+    TaskResponse,
 )
+from backend.tasks import process_bulk_resumes_task, run_ai_screening_task
 from backend.services.pdf_service import extract_text_from_pdf
 from backend.services.storage_service import save_candidate_resume, generate_candidate_resume_download_url
 from backend.services.vector_service import VectorService
@@ -144,26 +146,22 @@ def get_dashboard_stats(
 # Candidate Management
 # ══════════════════════════════════════════════════════════════════════
 
-@router.post("/candidates/upload", response_model=list[CandidateUploadResponse])
+@router.post("/candidates/upload", response_model=TaskResponse)
 async def upload_candidates(
     files: list[UploadFile] = File(...),
     current_user: User = Depends(require_hr_role),
     db: Session = Depends(get_db),
 ):
     """Upload candidate resumes as PDFs.
-
-    **PDF**: Each file is parsed via PyMuPDF to extract text.
+    Dispatches processing to a background Celery task.
     """
-    # Enforce upload limit safeguard
     if current_user.resumes_count + len(files) > current_user.max_resumes:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Upload limit exceeded. You can upload up to {current_user.max_resumes} resumes (Current: {current_user.resumes_count})."
         )
 
-    results = []
-    vector_service = VectorService.get_instance()
-    screening_service = ScreeningService(vector_service)
+    files_data = []
 
     for file in files:
         if not file.filename:
@@ -183,40 +181,27 @@ async def upload_candidates(
                 detail=f"File '{file.filename}' exceeds the 20MB limit."
             )
 
-        # ── PDF Upload ───────────────────────────────────────
-        try:
-            resume_text = extract_text_from_pdf(file_bytes)
-        except Exception as e:
-            logger.error("Failed to extract text from %s: %s", file.filename, e)
-            continue
-
         candidate_id = str(uuid.uuid4())
-        save_candidate_resume(candidate_id, file.filename, file_bytes)
+        filepath = save_candidate_resume(candidate_id, file.filename, file_bytes)
 
-        result = _process_single_resume(
-            resume_text=resume_text,
-            source_label=file.filename,
-            category=None,
-            screening_service=screening_service,
-            vector_service=vector_service,
-            current_user=current_user,
-            db=db,
-            candidate_id=candidate_id,
-        )
-        if result:
-            results.append(result)
+        files_data.append({
+            "filename": file.filename,
+            "filepath": filepath,
+            "candidate_id": candidate_id
+        })
 
-    if not results:
+    if not files_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid resumes were found in the uploaded files. Supported: PDF.",
         )
 
-    # Increment historical uploads count
-    current_user.resumes_count += len(results)
+    current_user.resumes_count += len(files_data)
     db.commit()
 
-    return results
+    task = process_bulk_resumes_task.delay(current_user.id, files_data)
+
+    return TaskResponse(task_id=task.id, status="Processing bulk upload")
 
 
 @router.get("/candidates", response_model=list[CandidateDetail])
@@ -442,83 +427,31 @@ def delete_job_description(
 # AI Screening
 # ══════════════════════════════════════════════════════════════════════
 
-@router.post("/screen", response_model=list[ScreeningResultResponse])
+@router.post("/screen", response_model=TaskResponse)
 def screen_candidates(
     body: ScreenRequest,
     current_user: User = Depends(require_hr_role),
     db: Session = Depends(get_db),
 ):
     """Run AI screening: match candidates from the pool against a Job Description.
-
-    Uses RAG to retrieve semantically similar resumes, then LLM to score each match.
-    Results are persisted in the screening_results table.
+    Dispatches processing to a background Celery task.
     """
-    # Enforce screening limit safeguard
     if current_user.screenings_count >= current_user.max_screenings:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Screening limit exceeded. You can perform up to {current_user.max_screenings} screening runs (Current: {current_user.screenings_count})."
         )
 
-    # Get the JD
     jd = db.query(JobDescription).filter(JobDescription.id == body.job_description_id, JobDescription.created_by == current_user.id).first()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
-    # Run screening pipeline
-    vector_service = VectorService.get_instance()
-    screening_service = ScreeningService(vector_service)
-
-    # Build a map of candidate_id → full resume text for accurate scoring
-    all_candidates = db.query(Candidate).filter(Candidate.uploaded_by == current_user.id).all()
-    candidate_resumes = {c.id: c.resume_text for c in all_candidates}
-
-    try:
-        raw_results = screening_service.screen_candidates(
-            jd_text=jd.description,
-            top_n=body.top_n,
-            candidate_resumes=candidate_resumes,
-        )
-    except Exception as e:
-        logger.error("Screening pipeline failed: %s", e)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Screening failed: {str(e)}",
-        )
-
-    # Delete previous results for this JD to avoid duplicates
-    db.query(ScreeningResult).filter(ScreeningResult.job_description_id == jd.id).delete()
-
-    # Persist results
-    response_results = []
-    for raw in raw_results:
-        candidate = db.query(Candidate).filter(Candidate.id == raw["candidate_id"], Candidate.uploaded_by == current_user.id).first()
-        if not candidate:
-            continue
-
-        screening_result = ScreeningResult(
-            job_description_id=jd.id,
-            candidate_id=candidate.id,
-            match_score=raw["match_score"],
-            match_justification=raw["match_justification"],
-        )
-        db.add(screening_result)
-        db.flush()  # Get the ID
-
-        response_results.append(ScreeningResultResponse(
-            id=screening_result.id,
-            candidate=CandidateDetail.model_validate(candidate),
-            match_score=screening_result.match_score,
-            match_justification=screening_result.match_justification,
-            vetting_questions=screening_result.vetting_questions,
-            created_at=screening_result.created_at,
-        ))
-
-    # Increment screening run count
     current_user.screenings_count += 1
     db.commit()
-    logger.info("Screening complete: %d results for JD %s", len(response_results), jd.id)
-    return response_results
+
+    task = run_ai_screening_task.delay(current_user.id, body.job_description_id, body.top_n)
+
+    return TaskResponse(task_id=task.id, status="Processing screening")
 
 
 @router.get("/screening-results/{jd_id}", response_model=list[ScreeningResultResponse])

@@ -232,6 +232,7 @@ export default function ChatWindow({ conversationId }) {
           job={selectedJob}
           conversationId={conversationId}
           messages={conversation?.messages || []}
+          onAnalysisComplete={fetchConversation}
           onClose={() => setSelectedJob(null)}
         />
       )}

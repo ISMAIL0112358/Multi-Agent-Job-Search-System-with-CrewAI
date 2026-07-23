@@ -164,13 +164,31 @@ To run the application entirely on your local machine using open models (such as
    ```
 4. Start your local Ollama application/server. The backend will automatically switch to local embeddings and agent execution.
 
-Run the FastAPI backend server:
+### 3. Background Tasks Setup (Redis & Celery)
+The application uses Celery and Redis to handle heavy background tasks (like bulk resume parsing and AI screening). You must run these services alongside your backend.
+
+1. **Install and Start Redis** (Requires [Homebrew](https://brew.sh/) on Mac):
+   ```bash
+   brew install redis
+   redis-server
+   ```
+   *(Leave this running in its own terminal tab)*
+
+2. **Start the Celery Worker**:
+   Open a new terminal tab, navigate to the project root, and run:
+   ```bash
+   python3 -m celery -A backend.celery_app.celery_app worker --loglevel=info --concurrency=2
+   ```
+   *(Leave this running in its own terminal tab)*
+
+### 4. Run the Backend Server
+Once Redis and Celery are running, start the FastAPI backend server in a new terminal tab:
 ```bash
 uvicorn backend.main:app --reload
 ```
 The backend will run at `http://127.0.0.1:8000`.
 
-### 3. Frontend Setup
+### 5. Frontend Setup
 Open a new terminal window and navigate to the `frontend` directory:
 ```bash
 cd frontend
@@ -189,5 +207,5 @@ npm run dev
 ```
 The frontend will be accessible at `http://localhost:5173`.
 
-### 4. Enjoy!
+### 6. Enjoy!
 Open your browser, navigate to `http://localhost:5173`, log in with Google, and let your AI crew find your next job!
