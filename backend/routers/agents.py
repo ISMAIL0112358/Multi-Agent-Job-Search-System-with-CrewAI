@@ -1,36 +1,40 @@
-import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
 
+from backend.config import settings
 from backend.database import get_db
 from backend.deps import get_current_user
 from backend.models.user import User
 from backend.models.conversation import Conversation, Message
-from backend.schemas.job import JobAnalysisRequest, JobAnalysisResponse
-from backend.services.agent_service import run_full_analysis
-from backend.services.storage_service import save_cover_letter, save_generated_resume
-from backend.tasks import run_crewai_analysis_task
+from backend.schemas.job import JobAnalysisRequest
+from backend.schemas.chat import ChatRequest, ChatResponse
 from backend.schemas.hr import TaskResponse
+from backend.tasks import run_crewai_analysis_task
+from backend.middleware.agentops import get_agentops_callback_handler
 
 router = APIRouter(prefix="/conversations", tags=["Agents"])
 
 
 @router.post("/{conversation_id}/analyze-job", response_model=TaskResponse)
-def analyze_job(
+async def analyze_job(
     conversation_id: str,
     body: JobAnalysisRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Run full CrewAI analysis on a job: JD summary, resume tweaks, cover letter."""
     # Validate conversation
-    convo = (
-        db.query(Conversation)
-        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
-        .first()
+    result = await db.execute(
+        select(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
     )
+    convo = result.scalar_one_or_none()
     if not convo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
@@ -50,39 +54,38 @@ def analyze_job(
     return TaskResponse(task_id=task.id, status="Processing job analysis")
 
 
-from backend.schemas.chat import ChatRequest, ChatResponse
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_ollama import ChatOllama
-from backend.config import settings
-
 @router.post("/{conversation_id}/chat", response_model=ChatResponse)
-def chat_followup(
+async def chat_followup(
     conversation_id: str,
     body: ChatRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Answer a follow-up question based on the job context."""
+    """Answer a follow-up question based on the job context asynchronously."""
     # Validate conversation
-    convo = (
-        db.query(Conversation)
-        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
-        .first()
+    result = await db.execute(
+        select(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
     )
+    convo = result.scalar_one_or_none()
+    if not convo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
     # Enforce follow-up messages limit check
-    user_messages_count = db.query(Message).filter(
-        Message.conversation_id == conversation_id,
-        Message.role == "user"
-    ).count()
+    count_result = await db.execute(
+        select(func.count(Message.id))
+        .where(Message.conversation_id == conversation_id, Message.role == "user")
+    )
+    user_messages_count = count_result.scalar_one()
+
     if user_messages_count >= current_user.max_messages_per_conversation:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Follow-up limit exceeded. You can ask up to {current_user.max_messages_per_conversation} follow-up questions per conversation (Current: {user_messages_count})."
         )
 
-    # Use LangChain to query the model directly
+    # Use LangChain to query the model asynchronously
     try:
-        from backend.middleware.agentops import get_agentops_callback_handler
         handler = get_agentops_callback_handler(tags=["chat-followup"])
         callbacks = [handler] if handler else None
 
@@ -106,8 +109,6 @@ def chat_followup(
             ]
             llm = primary.with_fallbacks(fallbacks)
         
-        from langchain_core.messages import HumanMessage, SystemMessage
-        
         system_prompt = f"""
         You are a helpful career advisor assisting a user with a job application.
         The user has analyzed a job posting. Here is the context of the job analysis:
@@ -124,9 +125,9 @@ def chat_followup(
             HumanMessage(content=body.message)
         ]
         
-        response = llm.invoke(messages)
+        response = await llm.ainvoke(messages)
         
-        # Safely extract text content from LLM response (ChatGoogleGenerativeAI can return list of dicts)
+        # Safely extract text content from LLM response
         content = response.content
         if isinstance(content, list):
             parts = []
@@ -158,7 +159,7 @@ def chat_followup(
         db.add(assistant_msg)
         
         convo.updated_at = datetime.now(timezone.utc)
-        db.commit()
+        await db.commit()
         
         return ChatResponse(reply=reply_text)
         
@@ -167,4 +168,3 @@ def chat_followup(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat failed: {str(e)}",
         )
-

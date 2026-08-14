@@ -30,8 +30,22 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = useCallback(async (googleCode, role = 'job_seeker') => {
-    const response = await client.post('/auth/google', { code: googleCode, role });
+  const login = useCallback(async (authParams, defaultRole = 'job_seeker') => {
+    let idToken = '';
+    let role = defaultRole;
+
+    if (typeof authParams === 'object' && authParams !== null) {
+      idToken = authParams.id_token || authParams.credential || authParams.token || '';
+      role = authParams.role || defaultRole;
+    } else if (typeof authParams === 'string') {
+      idToken = authParams;
+    }
+
+    const response = await client.post('/auth/google', {
+      id_token: idToken,
+      role: role,
+    });
+    
     const { access_token, user: userData } = response.data;
     localStorage.setItem('auth_token', access_token);
     localStorage.setItem('user', JSON.stringify(userData));

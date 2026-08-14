@@ -1,9 +1,12 @@
-import json
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
-from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
+from backend.config import settings
 from backend.database import get_db
 from backend.deps import get_current_user
 from backend.models.user import User
@@ -15,18 +18,20 @@ router = APIRouter(prefix="/conversations", tags=["Resume"])
 user_resumes_router = APIRouter(prefix="/user-resumes", tags=["User Resumes"])
 
 
+class SelectResumeRequest(BaseModel):
+    filename: str
+
+
 @user_resumes_router.get("")
-def list_user_resumes(current_user: User = Depends(get_current_user)):
+async def list_user_resumes(current_user: User = Depends(get_current_user)):
     """List all previously uploaded resumes for the current user."""
     docs = get_user_documents(current_user.id, "resumes")
     return [d for d in docs if d["filename"].lower().endswith(".pdf")]
 
 
 @user_resumes_router.delete("/{filename}")
-def delete_resume(filename: str, current_user: User = Depends(get_current_user)):
+async def delete_resume(filename: str, current_user: User = Depends(get_current_user)):
     """Delete a previously uploaded resume by filename."""
-    import os
-    from backend.config import settings
     filepath = os.path.join(settings.DATA_DIR, "users", current_user.id, "resumes", filename)
     
     if not os.path.exists(filepath):
@@ -76,15 +81,15 @@ async def upload_resume(
     conversation_id: str,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Upload a PDF resume to a conversation. Extracts text and stores file."""
     # Validate conversation belongs to user
-    convo = (
-        db.query(Conversation)
-        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
-        .first()
+    result = await db.execute(
+        select(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
     )
+    convo = result.scalar_one_or_none()
     if not convo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
@@ -121,7 +126,6 @@ async def upload_resume(
     convo.resume_filename = file.filename
     convo.resume_text = resume_text
     convo.updated_at = datetime.now(timezone.utc)
-    db.commit()
 
     # Add a system message recording the upload
     msg = Message(
@@ -131,7 +135,7 @@ async def upload_resume(
         metadata_={"type": "resume_upload", "filename": file.filename},
     )
     db.add(msg)
-    db.commit()
+    await db.commit()
 
     return {
         "message": "Resume uploaded and text extracted successfully",
@@ -140,26 +144,20 @@ async def upload_resume(
         "text_length": len(resume_text),
     }
 
-from pydantic import BaseModel
-import os
-from backend.config import settings
-
-class SelectResumeRequest(BaseModel):
-    filename: str
 
 @router.post("/{conversation_id}/resume/select")
-def select_resume(
+async def select_resume(
     conversation_id: str,
     body: SelectResumeRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Select a previously uploaded resume by filename and attach to conversation."""
-    convo = (
-        db.query(Conversation)
-        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
-        .first()
+    result = await db.execute(
+        select(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
     )
+    convo = result.scalar_one_or_none()
     if not convo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
@@ -180,7 +178,6 @@ def select_resume(
     convo.resume_filename = body.filename
     convo.resume_text = resume_text
     convo.updated_at = datetime.now(timezone.utc)
-    db.commit()
 
     msg = Message(
         conversation_id=conversation_id,
@@ -189,7 +186,7 @@ def select_resume(
         metadata_={"type": "resume_select", "filename": body.filename},
     )
     db.add(msg)
-    db.commit()
+    await db.commit()
 
     return {
         "message": "Resume selected and text extracted successfully",

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class UserUpdate(BaseModel):
     """Request body for updating user profile."""
     name: Optional[str] = None
@@ -36,13 +37,13 @@ class UserUpdate(BaseModel):
 
 
 class GoogleAuthRequest(BaseModel):
-    """Request body for Google OAuth login."""
-    code: str
+    """Request body for Google OpenID Connect ID Token authentication."""
+    id_token: str = Field(..., description="Google signed OpenID Connect ID Token (JWT)")
     role: Optional[str] = "job_seeker"  # "job_seeker" or "hr"
 
 
 class AuthTokenResponse(BaseModel):
-    """JWT token response after successful auth."""
+    """OAuth 2.0 / OpenID Connect standard Bearer token response."""
     access_token: str
     token_type: str = "bearer"
     user: UserResponse

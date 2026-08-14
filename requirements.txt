@@ -22,7 +22,11 @@ openpyxl
 pandas
 langchain-ollama
 psycopg2-binary
+asyncpg
+aiosqlite
+greenlet
 boto3
 pgvector
 celery
 redis
+

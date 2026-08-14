@@ -4,6 +4,7 @@ HR Dashboard Router — all endpoints for the HR/Hiring Manager Dashboard.
 Handles candidate management, job descriptions, AI screening, and vetting Q&A generation.
 All endpoints require authenticated user with HR role.
 """
+import asyncio
 import logging
 import uuid
 import os
@@ -12,7 +13,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import select, func
 
 import re as re_module
 from backend.config import settings
@@ -60,10 +63,7 @@ def _process_single_resume(
     db: Session,
     candidate_id: str | None = None,
 ) -> CandidateUploadResponse | None:
-    """Process a single resume text into a Candidate record.
-
-    Shared logic between PDF and spreadsheet flows.
-    """
+    """Process a single resume text into a Candidate record synchronously (used by Celery worker)."""
     if not resume_text or not resume_text.strip():
         logger.warning("Empty resume text for %s", source_label)
         return None
@@ -114,21 +114,29 @@ def _process_single_resume(
 # ══════════════════════════════════════════════════════════════════════
 
 @router.get("/dashboard", response_model=DashboardStats)
-def get_dashboard_stats(
+async def get_dashboard_stats(
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get aggregate stats for the HR dashboard header."""
+    """Get aggregate stats for the HR dashboard header asynchronously."""
     total_candidates = current_user.resumes_count
     open_positions = current_user.jds_count
-    shortlisted = db.query(Candidate).filter(
-        Candidate.uploaded_by == current_user.id,
-        Candidate.status == "shortlisted"
-    ).count()
-    hired = db.query(Candidate).filter(
-        Candidate.uploaded_by == current_user.id,
-        Candidate.status == "hired"
-    ).count()
+
+    shortlisted_res = await db.execute(
+        select(func.count(Candidate.id)).where(
+            Candidate.uploaded_by == current_user.id,
+            Candidate.status == "shortlisted"
+        )
+    )
+    shortlisted = shortlisted_res.scalar_one()
+
+    hired_res = await db.execute(
+        select(func.count(Candidate.id)).where(
+            Candidate.uploaded_by == current_user.id,
+            Candidate.status == "hired"
+        )
+    )
+    hired = hired_res.scalar_one()
 
     return DashboardStats(
         total_candidates=total_candidates,
@@ -150,9 +158,9 @@ def get_dashboard_stats(
 async def upload_candidates(
     files: list[UploadFile] = File(...),
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Upload candidate resumes as PDFs.
+    """Upload candidate resumes as PDFs asynchronously.
     Dispatches processing to a background Celery task.
     """
     if current_user.resumes_count + len(files) > current_user.max_resumes:
@@ -197,7 +205,7 @@ async def upload_candidates(
         )
 
     current_user.resumes_count += len(files_data)
-    db.commit()
+    await db.commit()
 
     task = process_bulk_resumes_task.delay(current_user.id, files_data)
 
@@ -205,45 +213,53 @@ async def upload_candidates(
 
 
 @router.get("/candidates", response_model=list[CandidateDetail])
-def list_candidates(
+async def list_candidates(
     status_filter: Optional[str] = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """List all candidates, optionally filtered by status."""
-    query = db.query(Candidate).filter(Candidate.uploaded_by == current_user.id)
+    """List all candidates, optionally filtered by status asynchronously."""
+    query = select(Candidate).where(Candidate.uploaded_by == current_user.id)
     if status_filter:
-        query = query.filter(Candidate.status == status_filter)
+        query = query.where(Candidate.status == status_filter)
     query = query.order_by(Candidate.created_at.desc())
 
     offset = (page - 1) * page_size
-    candidates = query.offset(offset).limit(page_size).all()
+    query = query.offset(offset).limit(page_size)
+    result = await db.execute(query)
+    candidates = result.scalars().all()
     return [CandidateDetail.model_validate(c) for c in candidates]
 
 
 @router.get("/candidates/{candidate_id}", response_model=CandidateDetail)
-def get_candidate(
+async def get_candidate(
     candidate_id: str,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get full details for a single candidate."""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id).first()
+    """Get full details for a single candidate asynchronously."""
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id)
+    )
+    candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
     return CandidateDetail.model_validate(candidate)
 
 
 @router.get("/candidates/{candidate_id}/download")
-def download_candidate_resume(
+async def download_candidate_resume(
     candidate_id: str,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Download the candidate's original resume PDF file."""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id).first()
+    """Download the candidate's original resume PDF file asynchronously."""
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id)
+    )
+    candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
@@ -281,34 +297,40 @@ def download_candidate_resume(
 
 
 @router.patch("/candidates/{candidate_id}/status", response_model=CandidateDetail)
-def update_candidate_status(
+async def update_candidate_status(
     candidate_id: str,
     body: StatusUpdate,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Update a candidate's pipeline status."""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id).first()
+    """Update a candidate's pipeline status asynchronously."""
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id)
+    )
+    candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
     candidate.status = body.status
     candidate.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(candidate)
+    await db.commit()
+    await db.refresh(candidate)
 
     logger.info("Candidate %s status updated to %s by %s", candidate_id, body.status, current_user.id)
     return CandidateDetail.model_validate(candidate)
 
 
 @router.delete("/candidates/{candidate_id}")
-def delete_candidate(
+async def delete_candidate(
     candidate_id: str,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Delete a candidate and their vector data."""
-    candidate = db.query(Candidate).filter(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id).first()
+    """Delete a candidate and their vector data asynchronously."""
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.uploaded_by == current_user.id)
+    )
+    candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
@@ -319,8 +341,8 @@ def delete_candidate(
     except Exception as e:
         logger.warning("Failed to delete vector data for candidate %s: %s", candidate_id, e)
 
-    db.delete(candidate)
-    db.commit()
+    await db.delete(candidate)
+    await db.commit()
 
     logger.info("Candidate %s deleted by %s", candidate_id, current_user.id)
     return {"message": "Candidate deleted successfully"}
@@ -331,10 +353,10 @@ def delete_candidate(
 # ══════════════════════════════════════════════════════════════════════
 
 @router.post("/job-descriptions", response_model=JobDescriptionResponse)
-def create_job_description(
+async def create_job_description(
     body: JobDescriptionCreate,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     # Enforce JD limit safeguard
     if current_user.jds_count >= current_user.max_jds:
@@ -354,47 +376,55 @@ def create_job_description(
     # Increment historical JDs count
     current_user.jds_count += 1
     
-    db.commit()
-    db.refresh(jd)
+    await db.commit()
+    await db.refresh(jd)
     return JobDescriptionResponse.model_validate(jd)
 
 
 @router.get("/job-descriptions", response_model=list[JobDescriptionResponse])
-def list_job_descriptions(
+async def list_job_descriptions(
     status_filter: Optional[str] = Query(None, alias="status"),
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """List all Job Descriptions."""
-    query = db.query(JobDescription).filter(JobDescription.created_by == current_user.id)
+    """List all Job Descriptions asynchronously."""
+    query = select(JobDescription).where(JobDescription.created_by == current_user.id)
     if status_filter:
-        query = query.filter(JobDescription.status == status_filter)
-    jds = query.order_by(JobDescription.created_at.desc()).all()
+        query = query.where(JobDescription.status == status_filter)
+    query = query.order_by(JobDescription.created_at.desc())
+    result = await db.execute(query)
+    jds = result.scalars().all()
     return [JobDescriptionResponse.model_validate(jd) for jd in jds]
 
 
 @router.get("/job-descriptions/{jd_id}", response_model=JobDescriptionResponse)
-def get_job_description(
+async def get_job_description(
     jd_id: str,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get a single Job Description."""
-    jd = db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.created_by == current_user.id).first()
+    """Get a single Job Description asynchronously."""
+    result = await db.execute(
+        select(JobDescription).where(JobDescription.id == jd_id, JobDescription.created_by == current_user.id)
+    )
+    jd = result.scalar_one_or_none()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
     return JobDescriptionResponse.model_validate(jd)
 
 
 @router.patch("/job-descriptions/{jd_id}", response_model=JobDescriptionResponse)
-def update_job_description(
+async def update_job_description(
     jd_id: str,
     body: JobDescriptionUpdate,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Update a Job Description."""
-    jd = db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.created_by == current_user.id).first()
+    """Update a Job Description asynchronously."""
+    result = await db.execute(
+        select(JobDescription).where(JobDescription.id == jd_id, JobDescription.created_by == current_user.id)
+    )
+    jd = result.scalar_one_or_none()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
@@ -402,24 +432,27 @@ def update_job_description(
     for key, value in update_data.items():
         setattr(jd, key, value)
     jd.updated_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(jd)
+    await db.commit()
+    await db.refresh(jd)
     return JobDescriptionResponse.model_validate(jd)
 
 
 @router.delete("/job-descriptions/{jd_id}")
-def delete_job_description(
+async def delete_job_description(
     jd_id: str,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Delete a Job Description and its screening results."""
-    jd = db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.created_by == current_user.id).first()
+    """Delete a Job Description and its screening results asynchronously."""
+    result = await db.execute(
+        select(JobDescription).where(JobDescription.id == jd_id, JobDescription.created_by == current_user.id)
+    )
+    jd = result.scalar_one_or_none()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
-    db.delete(jd)
-    db.commit()
+    await db.delete(jd)
+    await db.commit()
     return {"message": "Job Description deleted successfully"}
 
 
@@ -428,10 +461,10 @@ def delete_job_description(
 # ══════════════════════════════════════════════════════════════════════
 
 @router.post("/screen", response_model=TaskResponse)
-def screen_candidates(
+async def screen_candidates(
     body: ScreenRequest,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Run AI screening: match candidates from the pool against a Job Description.
     Dispatches processing to a background Celery task.
@@ -442,12 +475,15 @@ def screen_candidates(
             detail=f"Screening limit exceeded. You can perform up to {current_user.max_screenings} screening runs (Current: {current_user.screenings_count})."
         )
 
-    jd = db.query(JobDescription).filter(JobDescription.id == body.job_description_id, JobDescription.created_by == current_user.id).first()
+    result = await db.execute(
+        select(JobDescription).where(JobDescription.id == body.job_description_id, JobDescription.created_by == current_user.id)
+    )
+    jd = result.scalar_one_or_none()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
     current_user.screenings_count += 1
-    db.commit()
+    await db.commit()
 
     task = run_ai_screening_task.delay(current_user.id, body.job_description_id, body.top_n)
 
@@ -455,30 +491,33 @@ def screen_candidates(
 
 
 @router.get("/screening-results/{jd_id}", response_model=list[ScreeningResultResponse])
-def get_screening_results(
+async def get_screening_results(
     jd_id: str,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Get saved screening results for a Job Description."""
-    jd = db.query(JobDescription).filter(JobDescription.id == jd_id, JobDescription.created_by == current_user.id).first()
+    """Get saved screening results for a Job Description asynchronously."""
+    result = await db.execute(
+        select(JobDescription).where(JobDescription.id == jd_id, JobDescription.created_by == current_user.id)
+    )
+    jd = result.scalar_one_or_none()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
-    results = (
-        db.query(ScreeningResult)
-        .filter(ScreeningResult.job_description_id == jd_id)
+    sr_result = await db.execute(
+        select(ScreeningResult)
+        .options(selectinload(ScreeningResult.candidate))
+        .where(ScreeningResult.job_description_id == jd_id)
         .order_by(ScreeningResult.match_score.desc())
-        .all()
     )
+    results = sr_result.scalars().all()
 
     response = []
     for r in results:
-        candidate = db.query(Candidate).filter(Candidate.id == r.candidate_id, Candidate.uploaded_by == current_user.id).first()
-        if candidate:
+        if r.candidate and r.candidate.uploaded_by == current_user.id:
             response.append(ScreeningResultResponse(
                 id=r.id,
-                candidate=CandidateDetail.model_validate(candidate),
+                candidate=CandidateDetail.model_validate(r.candidate),
                 match_score=r.match_score,
                 match_justification=r.match_justification,
                 vetting_questions=r.vetting_questions,
@@ -493,29 +532,39 @@ def get_screening_results(
 # ══════════════════════════════════════════════════════════════════════
 
 @router.post("/vetting-questions", response_model=list[VettingQuestionResponse])
-def generate_vetting_questions(
+async def generate_vetting_questions(
     body: VettingRequest,
     current_user: User = Depends(require_hr_role),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Generate AI-powered vetting Q&As for a candidate-JD pair.
+    """Generate AI-powered vetting Q&As for a candidate-JD pair asynchronously.
 
     Questions are designed to verify the candidate's claimed skills
     and detect potential misrepresentation. Results are saved to the
     screening_result record.
     """
-    candidate = db.query(Candidate).filter(Candidate.id == body.candidate_id, Candidate.uploaded_by == current_user.id).first()
+    cand_result = await db.execute(
+        select(Candidate).where(Candidate.id == body.candidate_id, Candidate.uploaded_by == current_user.id)
+    )
+    candidate = cand_result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
-    jd = db.query(JobDescription).filter(JobDescription.id == body.job_description_id, JobDescription.created_by == current_user.id).first()
+    jd_result = await db.execute(
+        select(JobDescription).where(JobDescription.id == body.job_description_id, JobDescription.created_by == current_user.id)
+    )
+    jd = jd_result.scalar_one_or_none()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Description not found")
 
-    # Generate vetting questions
+    # Generate vetting questions non-blockingly
     screening_service = ScreeningService()
     try:
-        questions = screening_service.generate_vetting_questions(candidate.resume_text, jd.description)
+        questions = await asyncio.to_thread(
+            screening_service.generate_vetting_questions,
+            candidate.resume_text,
+            jd.description
+        )
     except Exception as e:
         logger.error("Vetting Q&A generation failed: %s", e)
         raise HTTPException(
@@ -524,16 +573,15 @@ def generate_vetting_questions(
         )
 
     # Save to screening result if one exists
-    screening_result = (
-        db.query(ScreeningResult)
-        .filter(
+    sr_result = await db.execute(
+        select(ScreeningResult).where(
             ScreeningResult.job_description_id == body.job_description_id,
             ScreeningResult.candidate_id == body.candidate_id,
         )
-        .first()
     )
+    screening_result = sr_result.scalar_one_or_none()
     if screening_result:
         screening_result.vetting_questions = questions
-        db.commit()
+        await db.commit()
 
     return [VettingQuestionResponse(**q) for q in questions]

@@ -3,9 +3,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
-from backend.database import Base, engine
+from backend.database import Base, async_engine
 from backend.middleware.agentops import init_agentops
 from backend.routers import auth, conversations, resume, jobs, agents, hr, tasks
 
@@ -18,13 +18,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown events."""
     # Startup
-    logger.info("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created.")
+    logger.info("Creating database tables asynchronously...")
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created.")
 
-    # Ensure user limit columns exist (Alters existing table for schema updates)
-    from sqlalchemy import text
-    with engine.connect() as conn:
+        # Ensure user limit columns exist (Alters existing table for schema updates)
         for col, default_val in [
             ("max_resumes", 50),
             ("resumes_count", 0),
@@ -37,8 +36,7 @@ async def lifespan(app: FastAPI):
             ("max_messages_per_conversation", 50)
         ]:
             try:
-                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} INTEGER DEFAULT {default_val} NOT NULL;"))
-                conn.commit()
+                await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} INTEGER DEFAULT {default_val} NOT NULL;"))
                 logger.info(f"Added column {col} to users table.")
             except Exception:
                 # Column already exists or table does not support it, ignore
@@ -56,7 +54,9 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Application shutting down.")
+    logger.info("Closing async database connection pool...")
+    await async_engine.dispose()
+    logger.info("Application shutdown complete.")
 
 
 app = FastAPI(
@@ -91,6 +91,6 @@ app.include_router(tasks.router, prefix="/api")
 
 
 @app.get("/api/health")
-def health_check():
+async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "version": "2.0.0"}
