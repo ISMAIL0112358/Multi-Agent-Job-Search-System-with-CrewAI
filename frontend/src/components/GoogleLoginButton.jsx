@@ -10,7 +10,8 @@ export default function GoogleLoginButton({ role = 'job_seeker', label, classNam
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
-        const userData = await login(tokenResponse.access_token, role);
+        const token = tokenResponse.access_token || tokenResponse.code || tokenResponse.credential;
+        const userData = await login(token, role);
         // Redirect based on role
         if (userData.role === 'hr') {
           navigate('/hr');
@@ -18,10 +19,10 @@ export default function GoogleLoginButton({ role = 'job_seeker', label, classNam
           navigate('/');
         }
       } catch (err) {
-        console.error('Login failed:', err);
+        console.error('Authorization login failed:', err);
       }
     },
-    onError: (error) => console.error('Google login error:', error),
+    onError: (error) => console.error('Google authorization error:', error),
   });
 
   return (

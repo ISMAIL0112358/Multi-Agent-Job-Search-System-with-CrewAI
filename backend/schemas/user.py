@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class UserUpdate(BaseModel):
     """Request body for updating user profile."""
     name: Optional[str] = None
@@ -36,13 +37,15 @@ class UserUpdate(BaseModel):
 
 
 class GoogleAuthRequest(BaseModel):
-    """Request body for Google OAuth login."""
+    """Request body for Google OAuth 2.0 / OpenID Connect authorization code flow with PKCE."""
     code: str
+    code_verifier: Optional[str] = None  # PKCE code verifier (RFC 7636)
+    redirect_uri: Optional[str] = "postmessage"
     role: Optional[str] = "job_seeker"  # "job_seeker" or "hr"
 
 
 class AuthTokenResponse(BaseModel):
-    """JWT token response after successful auth."""
+    """OAuth 2.0 / OpenID Connect standard Bearer token response."""
     access_token: str
     token_type: str = "bearer"
     user: UserResponse

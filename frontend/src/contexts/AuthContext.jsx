@@ -30,8 +30,13 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = useCallback(async (googleCode, role = 'job_seeker') => {
-    const response = await client.post('/auth/google', { code: googleCode, role });
+  const login = useCallback(async (authParams, defaultRole = 'job_seeker') => {
+    // Supports both object ({ code, code_verifier, redirect_uri, role }) and legacy string code
+    const payload = typeof authParams === 'object'
+      ? { role: defaultRole, ...authParams }
+      : { code: authParams, role: defaultRole };
+
+    const response = await client.post('/auth/google', payload);
     const { access_token, user: userData } = response.data;
     localStorage.setItem('auth_token', access_token);
     localStorage.setItem('user', JSON.stringify(userData));

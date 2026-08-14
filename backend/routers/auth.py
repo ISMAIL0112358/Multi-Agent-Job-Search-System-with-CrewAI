@@ -13,13 +13,17 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/google", response_model=AuthTokenResponse)
 async def google_login(request: GoogleAuthRequest, db: AsyncSession = Depends(get_db)):
-    """Authenticate with Google OAuth authorization code.
+    """Authenticate with Google OAuth 2.0 / OpenID Connect authorization code & PKCE.
     
-    Exchanges the code for user info, creates or finds the user in DB,
-    and returns a JWT token.
+    Exchanges the authorization code for user info, creates or finds the user in DB,
+    and returns a standard JWT Bearer access token.
     """
     try:
-        google_user = await exchange_google_code(request.code)
+        google_user = await exchange_google_code(
+            code_or_token=request.code,
+            code_verifier=request.code_verifier,
+            redirect_uri=request.redirect_uri,
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -52,11 +56,12 @@ async def google_login(request: GoogleAuthRequest, db: AsyncSession = Depends(ge
         await db.commit()
         await db.refresh(user)
 
-    # Create JWT
+    # Create standard JWT Bearer access token
     token = create_jwt(user.id)
 
     return AuthTokenResponse(
         access_token=token,
+        token_type="bearer",
         user=UserResponse.model_validate(user),
     )
 
