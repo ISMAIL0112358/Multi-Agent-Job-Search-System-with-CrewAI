@@ -31,12 +31,21 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (authParams, defaultRole = 'job_seeker') => {
-    // Supports both object ({ code, code_verifier, redirect_uri, role }) and legacy string code
-    const payload = typeof authParams === 'object'
-      ? { role: defaultRole, ...authParams }
-      : { code: authParams, role: defaultRole };
+    let idToken = '';
+    let role = defaultRole;
 
-    const response = await client.post('/auth/google', payload);
+    if (typeof authParams === 'object' && authParams !== null) {
+      idToken = authParams.id_token || authParams.credential || authParams.token || '';
+      role = authParams.role || defaultRole;
+    } else if (typeof authParams === 'string') {
+      idToken = authParams;
+    }
+
+    const response = await client.post('/auth/google', {
+      id_token: idToken,
+      role: role,
+    });
+    
     const { access_token, user: userData } = response.data;
     localStorage.setItem('auth_token', access_token);
     localStorage.setItem('user', JSON.stringify(userData));

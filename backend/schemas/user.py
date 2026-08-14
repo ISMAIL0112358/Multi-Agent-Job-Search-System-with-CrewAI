@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 
@@ -37,10 +37,8 @@ class UserUpdate(BaseModel):
 
 
 class GoogleAuthRequest(BaseModel):
-    """Request body for Google OAuth 2.0 / OpenID Connect authorization code flow with PKCE."""
-    code: str
-    code_verifier: Optional[str] = None  # PKCE code verifier (RFC 7636)
-    redirect_uri: Optional[str] = "postmessage"
+    """Request body for Google OpenID Connect ID Token authentication."""
+    id_token: str = Field(..., description="Google signed OpenID Connect ID Token (JWT)")
     role: Optional[str] = "job_seeker"  # "job_seeker" or "hr"
 
 
