@@ -6,9 +6,10 @@ from backend.celery_app import celery_app
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
+
 @router.get("/{task_id}")
-def get_task_status(task_id: str, current_user: User = Depends(get_current_user)):
-    """Check the status of a background task."""
+async def get_task_status(task_id: str, current_user: User = Depends(get_current_user)):
+    """Check the status of a background task asynchronously."""
     try:
         task_result = AsyncResult(task_id, app=celery_app)
         

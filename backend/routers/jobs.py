@@ -1,8 +1,10 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from backend.database import get_db
 from backend.deps import get_current_user
@@ -15,20 +17,38 @@ from backend.services.agent_service import run_hiring_score
 router = APIRouter(prefix="/conversations", tags=["Jobs"])
 
 
+async def _score_single_job(parsed: dict, resume_text: str, user_skills: str | None, company_preference: str | None) -> JobResult:
+    """Score a single parsed job item concurrently in a non-blocking thread."""
+    try:
+        score_result = await asyncio.to_thread(
+            run_hiring_score,
+            parsed["job_summary"],
+            resume_text,
+            user_skills,
+            company_preference,
+        )
+        parsed["hiring_score"] = score_result["score"]
+        parsed["hiring_score_reasoning"] = score_result["reasoning"]
+    except Exception as e:
+        parsed["hiring_score"] = None
+        parsed["hiring_score_reasoning"] = f"Score unavailable: {e}"
+    return JobResult(**parsed)
+
+
 @router.post("/{conversation_id}/search-jobs", response_model=JobSearchResponse)
-def search_jobs(
+async def search_jobs(
     conversation_id: str,
     body: JobSearchRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Search for jobs and score each against the uploaded resume."""
+    """Search for jobs and score each against the uploaded resume asynchronously."""
     # Validate conversation
-    convo = (
-        db.query(Conversation)
-        .filter(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
-        .first()
+    result = await db.execute(
+        select(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.user_id == current_user.id)
     )
+    convo = result.scalar_one_or_none()
     if not convo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
@@ -38,25 +58,23 @@ def search_jobs(
             detail="Please upload a resume first before searching for jobs.",
         )
 
-    # Fetch jobs from LinkedIn
-    raw_jobs = fetch_linkedin_jobs(body.keyword, body.location, body.results_per_page)
+    # Fetch jobs from LinkedIn asynchronously
+    raw_jobs = await fetch_linkedin_jobs(body.keyword, body.location, body.results_per_page)
 
-    # Parse and score each job if results exist
+    # Parse and score each job concurrently if results exist
     results = []
     if raw_jobs:
-        for item in raw_jobs:
-            parsed = parse_job_item(item)
-
-            # Run hiring score agent
-            try:
-                score_result = run_hiring_score(parsed["job_summary"], convo.resume_text, current_user.skills, body.company_preference)
-                parsed["hiring_score"] = score_result["score"]
-                parsed["hiring_score_reasoning"] = score_result["reasoning"]
-            except Exception as e:
-                parsed["hiring_score"] = None
-                parsed["hiring_score_reasoning"] = f"Score unavailable: {e}"
-
-            results.append(JobResult(**parsed))
+        score_tasks = [
+            _score_single_job(
+                parse_job_item(item),
+                convo.resume_text,
+                current_user.skills,
+                body.company_preference,
+            )
+            for item in raw_jobs
+        ]
+        results = await asyncio.gather(*score_tasks)
+        results = list(results)
 
         # Sort by hiring score (highest first)
         results.sort(key=lambda j: j.hiring_score or 0, reverse=True)
@@ -85,6 +103,6 @@ def search_jobs(
     if convo.title == "New Conversation":
         convo.title = f"{body.keyword} — {body.location}"
     convo.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    await db.commit()
 
     return JobSearchResponse(jobs=results, total=len(results))
