@@ -146,11 +146,12 @@ class ScreeningService:
                 else candidate_match["chunk_text"]
             )
             try:
-                match_result = self._score_candidate(jd_text, resume_text)
+                match_result, tokens = self._score_candidate(jd_text, resume_text)
                 return {
                     "candidate_id": candidate_id,
                     "match_score": match_result.match_score,
                     "match_justification": match_result.justification,
+                    "tokens": tokens,
                 }
             except Exception as e:
                 logger.error("Failed to score candidate %s: %s", candidate_id, e)
@@ -158,6 +159,7 @@ class ScreeningService:
                     "candidate_id": candidate_id,
                     "match_score": candidate_match["score"] * 100,  # Fallback to vector similarity
                     "match_justification": f"Scoring based on semantic similarity (LLM scoring failed: {e})",
+                    "tokens": 0,
                 }
 
         results = []
@@ -169,11 +171,8 @@ class ScreeningService:
         results.sort(key=lambda x: x["match_score"], reverse=True)
         return results[:top_n]
 
-    def _score_candidate(self, jd_text: str, resume_text: str) -> CandidateMatchResult:
-        """Score a single candidate against a JD using LLM.
-
-        Returns a CandidateMatchResult with score and justification.
-        """
+    def _score_candidate(self, jd_text: str, resume_text: str) -> tuple[CandidateMatchResult, int]:
+        """Score a single candidate against a JD using LLM and return (CandidateMatchResult, tokens)."""
         system_prompt = """You are a senior HR analytics specialist with expertise in resume screening.
 Evaluate how well the candidate's resume matches the job description.
 
@@ -198,6 +197,9 @@ Analyze the match and respond with JSON only."""
             HumanMessage(content=human_prompt),
         ])
 
+        from backend.services.token_service import extract_gemini_generation_tokens
+        tokens = extract_gemini_generation_tokens(response)
+
         raw_text = self._get_response_text(response)
 
         # Parse the JSON response
@@ -210,7 +212,7 @@ Analyze the match and respond with JSON only."""
                 content = content.split("```")[1].split("```")[0].strip()
 
             data = json.loads(content)
-            return CandidateMatchResult(**data)
+            return CandidateMatchResult(**data), tokens
         except (json.JSONDecodeError, Exception) as e:
             logger.warning("Failed to parse LLM JSON response: %s — raw: %s", e, raw_text[:200])
             # Fallback: try to extract score from text
@@ -221,21 +223,10 @@ Analyze the match and respond with JSON only."""
             return CandidateMatchResult(
                 match_score=score,
                 justification=raw_text[:500],
-            )
+            ), tokens
 
-    def generate_vetting_questions(self, resume_text: str, jd_text: str) -> list[dict]:
-        """Generate targeted verification Q&As for a candidate.
-
-        Creates questions designed to verify the candidate's claimed skills
-        and detect potential misrepresentation.
-
-        Args:
-            resume_text: The candidate's full resume text.
-            jd_text: The job description for context.
-
-        Returns:
-            List of dicts with {question, expected_answer, skill_area, difficulty}.
-        """
+    def generate_vetting_questions(self, resume_text: str, jd_text: str) -> tuple[list[dict], int]:
+        """Generate targeted verification Q&As for a candidate and return (questions, tokens)."""
         system_prompt = """You are an expert HR interviewer specialized in candidate verification.
 Generate 5 targeted verification questions based on the candidate's resume claims.
 
@@ -271,6 +262,9 @@ Generate 5 targeted verification questions. Respond with JSON only."""
             HumanMessage(content=human_prompt),
         ])
 
+        from backend.services.token_service import extract_gemini_generation_tokens
+        tokens = extract_gemini_generation_tokens(response)
+
         raw_text = self._get_response_text(response)
 
         try:
@@ -282,7 +276,7 @@ Generate 5 targeted verification questions. Respond with JSON only."""
 
             data = json.loads(content)
             question_set = VettingQuestionSet(**data)
-            return [q.model_dump() for q in question_set.questions]
+            return [q.model_dump() for q in question_set.questions], tokens
         except (json.JSONDecodeError, Exception) as e:
             logger.warning("Failed to parse vetting questions JSON: %s — raw: %s", e, raw_text[:200])
             return [{
@@ -290,17 +284,10 @@ Generate 5 targeted verification questions. Respond with JSON only."""
                 "expected_answer": "",
                 "skill_area": "general",
                 "difficulty": "basic",
-            }]
+            }], tokens
 
     def extract_candidate_info(self, resume_text: str) -> dict:
-        """Extract basic contact information from a resume.
-
-        Args:
-            resume_text: The full resume text.
-
-        Returns:
-            Dict with {name, email, phone}.
-        """
+        """Extract basic contact information from a resume and return dict including exact tokens."""
         system_prompt = """Extract the candidate's basic contact information from the resume.
 
 You MUST respond with valid JSON in exactly this format:
@@ -317,6 +304,9 @@ Respond with JSON only. Do not add any extra text."""
             HumanMessage(content=f"Extract contact info from this resume:\n\n{resume_text[:2000]}"),
         ])
 
+        from backend.services.token_service import extract_gemini_generation_tokens
+        tokens = extract_gemini_generation_tokens(response)
+
         raw_text = self._get_response_text(response)
 
         try:
@@ -328,7 +318,9 @@ Respond with JSON only. Do not add any extra text."""
 
             data = json.loads(content)
             info = ExtractedCandidateInfo(**data)
-            return info.model_dump()
+            res = info.model_dump()
+            res["tokens"] = tokens
+            return res
         except (json.JSONDecodeError, Exception) as e:
             logger.warning("Failed to extract candidate info: %s", e)
             # Fallback: try simple regex extraction
@@ -351,4 +343,4 @@ Respond with JSON only. Do not add any extra text."""
                     name = line
                     break
 
-            return {"name": name, "email": email, "phone": phone}
+            return {"name": name, "email": email, "phone": phone, "tokens": tokens}

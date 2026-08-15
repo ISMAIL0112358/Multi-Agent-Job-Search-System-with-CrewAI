@@ -99,6 +99,16 @@ def _process_single_resume(
     db.commit()
     db.refresh(candidate)
 
+    # Track exact tokens directly from Gemini API
+    try:
+        from backend.services.token_service import add_tokens_sync, get_gemini_embedding_tokens
+        emb_tokens = get_gemini_embedding_tokens(resume_text)
+        gen_tokens = candidate_info.get("tokens", 0)
+        if gen_tokens > 0 or emb_tokens > 0:
+            add_tokens_sync(current_user.id, generative_tokens=gen_tokens, embedding_tokens=emb_tokens)
+    except Exception as e:
+        print(f"failed to get token used: {e}")
+
     return CandidateUploadResponse(
         id=candidate.id,
         name=candidate.name,
@@ -560,7 +570,7 @@ async def generate_vetting_questions(
     # Generate vetting questions non-blockingly
     screening_service = ScreeningService()
     try:
-        questions = await asyncio.to_thread(
+        questions, tokens = await asyncio.to_thread(
             screening_service.generate_vetting_questions,
             candidate.resume_text,
             jd.description
@@ -583,5 +593,13 @@ async def generate_vetting_questions(
     if screening_result:
         screening_result.vetting_questions = questions
         await db.commit()
+
+    # Track exact tokens directly from Gemini API
+    if tokens > 0:
+        try:
+            from backend.services.token_service import add_tokens_async
+            await add_tokens_async(current_user.id, generative_tokens=tokens)
+        except Exception as e:
+            print(f"failed to get token used: {e}")
 
     return [VettingQuestionResponse(**q) for q in questions]

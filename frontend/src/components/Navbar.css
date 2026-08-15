@@ -32,6 +32,58 @@
   background-clip: text;
 }
 
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.navbar-token-metrics {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.token-metric-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.token-metric-icon {
+  font-size: 0.95rem;
+}
+
+.token-metric-label {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.token-metric-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-metric-badge.generative .token-metric-value {
+  color: #818cf8;
+}
+
+.token-metric-badge.embedding .token-metric-value {
+  color: #2dd4bf;
+}
+
+.token-metric-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .navbar-user {
   display: flex;
   align-items: center;

@@ -24,6 +24,10 @@ class UserResponse(BaseModel):
     conversations_count: int = 0
     max_messages_per_conversation: int = 50
 
+    # Cumulative Token Tracking
+    generative_tokens_count: int = 0
+    embedding_tokens_count: int = 0
+
     class Config:
         from_attributes = True
 

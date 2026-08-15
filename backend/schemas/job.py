@@ -26,6 +26,7 @@ class JobSearchResponse(BaseModel):
     """Response from job search endpoint."""
     jobs: List[JobResult]
     total: int
+    search_time_seconds: Optional[float] = None
 
 
 class JobAnalysisRequest(BaseModel):

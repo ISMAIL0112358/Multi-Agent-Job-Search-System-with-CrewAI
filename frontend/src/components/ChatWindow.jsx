@@ -5,15 +5,18 @@ import JobCard from './JobCard';
 import JobDetailPanel from './JobDetailPanel';
 import MessageBubble from './MessageBubble';
 import Loader from './Loader';
+import { useAuth } from '../contexts/AuthContext';
 import './ChatWindow.css';
 
 export default function ChatWindow({ conversationId }) {
+  const { refreshUser } = useAuth();
   const [conversation, setConversation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
   const [companyPreference, setCompanyPreference] = useState('');
   const [searching, setSearching] = useState(false);
+  const [searchDuration, setSearchDuration] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
   const messagesEndRef = useRef(null);
@@ -39,6 +42,9 @@ export default function ChatWindow({ conversationId }) {
         .find(m => m.metadata_?.type === 'job_results');
       if (jobMsg?.metadata_?.jobs) {
         setJobs(jobMsg.metadata_.jobs);
+        if (jobMsg.metadata_?.search_time_seconds) {
+          setSearchDuration(jobMsg.metadata_.search_time_seconds);
+        }
       } else {
         setJobs([]);
       }
@@ -51,6 +57,7 @@ export default function ChatWindow({ conversationId }) {
 
   const handleResumeUploaded = (data) => {
     fetchConversation();
+    refreshUser();
   };
 
   const handleSearchJobs = async (e) => {
@@ -59,6 +66,7 @@ export default function ChatWindow({ conversationId }) {
 
     setSearching(true);
     setJobs([]);
+    const startTime = Date.now();
     try {
       const res = await client.post(`/conversations/${conversationId}/search-jobs`, {
         keyword: keyword.trim(),
@@ -66,8 +74,11 @@ export default function ChatWindow({ conversationId }) {
         company_preference: companyPreference.trim() || undefined,
         results_per_page: 5,
       });
+      const elapsed = res.data.search_time_seconds || ((Date.now() - startTime) / 1000).toFixed(2);
+      setSearchDuration(elapsed);
       setJobs(res.data.jobs);
       fetchConversation();
+      refreshUser();
     } catch (err) {
       console.error('Job search failed:', err);
     } finally {
@@ -210,7 +221,25 @@ export default function ChatWindow({ conversationId }) {
       {jobs.length > 0 && !searching && (
         <div className="chat-section">
           <div className="chat-section-header">
-            <h3>Job Results ({jobs.length})</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+              <h3 style={{ margin: 0 }}>Job Results ({jobs.length})</h3>
+              {searchDuration && (
+                <span className="search-time-badge glass" style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600',
+                  color: '#38bdf8',
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)'
+                }}>
+                  ⚡ Search & match scoring completed in {searchDuration}s
+                </span>
+              )}
+            </div>
             <p>Click a job to get resume tweaks and a cover letter.</p>
           </div>
           <div className="chat-jobs-grid">
@@ -232,7 +261,10 @@ export default function ChatWindow({ conversationId }) {
           job={selectedJob}
           conversationId={conversationId}
           messages={conversation?.messages || []}
-          onAnalysisComplete={fetchConversation}
+          onAnalysisComplete={() => {
+            fetchConversation();
+            refreshUser();
+          }}
           onClose={() => setSelectedJob(null)}
         />
       )}

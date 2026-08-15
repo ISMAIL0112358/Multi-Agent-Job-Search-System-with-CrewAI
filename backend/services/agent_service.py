@@ -32,6 +32,10 @@ def run_hiring_score(job_summary: str, resume_text: str, user_skills: str = None
     result = crew.kickoff()
     result_text = str(result)
 
+    # Extract exact token usage directly from Gemini API via CrewAI usage metrics
+    from backend.services.token_service import extract_gemini_generation_tokens
+    tokens = extract_gemini_generation_tokens(crew)
+
     # Parse the score from the output
     score = 50  # Default
     reasoning = result_text
@@ -47,7 +51,7 @@ def run_hiring_score(job_summary: str, resume_text: str, user_skills: str = None
     if len(lines) > 1:
         reasoning = "\n".join(lines[1:]).strip()
 
-    return {"score": score, "reasoning": reasoning}
+    return {"score": score, "reasoning": reasoning, "tokens": tokens}
 
 
 def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skills: str = None) -> dict:
@@ -69,10 +73,22 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
         if not job_summary:
             job_summary = job_data.get("job_summary", "")
         if not job_summary:
+            job_summary = job_data.get("description", "")
+        if not job_summary:
             job_summary = str(job_data)
 
-    agency_name = job_data.get("OrganizationName", job_data.get("organization_name", "Unknown Agency"))
-    job_title = job_data.get("PositionTitle", job_data.get("position_title", "Unknown Position"))
+    agency_name = (
+        job_data.get("OrganizationName")
+        or job_data.get("organization_name")
+        or job_data.get("company")
+        or "Unknown Agency"
+    )
+    job_title = (
+        job_data.get("PositionTitle")
+        or job_data.get("position_title")
+        or job_data.get("title")
+        or "Unknown Position"
+    )
 
     # Initialize agents
     jd_agent = get_jd_analyst_agent()
@@ -96,8 +112,8 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
     # Run tasks in parallel using ThreadPoolExecutor
     from concurrent.futures import ThreadPoolExecutor
 
-    def _run_single_agent_task(agent, task) -> str:
-        """Run a single task using its assigned agent inside a temporary Crew."""
+    def _run_single_agent_task(agent, task) -> tuple[str, int]:
+        """Run a single task using its assigned agent inside a temporary Crew and extract tokens."""
         crew = Crew(
             agents=[agent],
             tasks=[task],
@@ -105,7 +121,10 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
             verbose=False,
         )
         crew.kickoff()
-        return str(task.output) if task.output else ""
+        output_str = str(task.output) if task.output else ""
+        from backend.services.token_service import extract_gemini_generation_tokens
+        task_tokens = extract_gemini_generation_tokens(crew)
+        return output_str, task_tokens
 
     tasks_to_run = [
         ("jd", jd_agent, jd_task),
@@ -116,6 +135,7 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
     ]
 
     outputs = {}
+    total_tokens = 0
     with ThreadPoolExecutor(max_workers=6) as executor:
         # Submit all agent task crews to the executor
         futures = {
@@ -132,7 +152,9 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
         for future in futures:
             name = futures[future]
             try:
-                outputs[name] = future.result()
+                out_text, tok = future.result()
+                outputs[name] = out_text
+                total_tokens += tok
             except Exception as e:
                 logger.error("Error running agent task %s: %s", name, e)
                 outputs[name] = f"Error during analysis: {str(e)}"
@@ -140,9 +162,10 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
         # Gather hiring score result
         try:
             score_result = hiring_score_future.result()
+            total_tokens += score_result.get("tokens", 0)
         except Exception as e:
             logger.error("Error calculating hiring score: %s", e)
-            score_result = {"score": 50, "reasoning": f"Error running hiring score: {str(e)}"}
+            score_result = {"score": 50, "reasoning": f"Error running hiring score: {str(e)}", "tokens": 0}
 
     return {
         "jd_summary": outputs.get("jd", ""),
@@ -152,5 +175,6 @@ def run_full_analysis(job_data: dict, resume_text: str, user_bio: str, user_skil
         "interview_prep": outputs.get("interview", ""),
         "hiring_score": score_result["score"],
         "hiring_score_reasoning": score_result["reasoning"],
+        "total_tokens": total_tokens,
     }
 

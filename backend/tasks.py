@@ -71,9 +71,14 @@ def process_bulk_resumes_task(user_id: str, files_data: list[Dict[str, Any]]):
         db.close()
 
 
+import time
+from backend.services.token_service import add_tokens_sync
+
+
 @celery_app.task(name="tasks.run_ai_screening")
 def run_ai_screening_task(user_id: str, job_description_id: str, top_n: int = 50):
-    """Run AI screening asynchronously."""
+    """Run AI screening asynchronously and track execution duration and tokens."""
+    start_time = time.time()
     db: Session = SessionLocal()
     try:
         jd = db.query(JobDescription).filter(
@@ -114,7 +119,16 @@ def run_ai_screening_task(user_id: str, job_description_id: str, top_n: int = 50
             count += 1
             
         db.commit()
-        return {"screened_count": count}
+
+        # Track exact tokens directly from Gemini API
+        from backend.services.token_service import get_gemini_embedding_tokens
+        gen_tokens = sum(r.get("tokens", 0) for r in raw_results)
+        emb_tokens = get_gemini_embedding_tokens(jd.description)
+        if gen_tokens > 0 or emb_tokens > 0:
+            add_tokens_sync(user_id, generative_tokens=gen_tokens, embedding_tokens=emb_tokens)
+
+        duration_seconds = round(time.time() - start_time, 2)
+        return {"screened_count": count, "duration_seconds": duration_seconds}
     except Exception as e:
         logger.error(f"Screening pipeline failed: {e}")
         return {"error": str(e)}
@@ -140,7 +154,12 @@ def run_crewai_analysis_task(user_id: str, conversation_id: str, job_data: dict,
         result = run_full_analysis(job_data, convo.resume_text, user_bio, current_user.skills)
 
         # Save generated documents
-        job_title = job_data.get("PositionTitle", job_data.get("position_title", "Unknown"))
+        job_title = (
+            job_data.get("PositionTitle")
+            or job_data.get("position_title")
+            or job_data.get("title")
+            or "Unknown"
+        )
 
         if result.get("cover_letter"):
             save_cover_letter(current_user.id, job_title, result["cover_letter"])
@@ -148,19 +167,21 @@ def run_crewai_analysis_task(user_id: str, conversation_id: str, job_data: dict,
         if result.get("resume_tweaks"):
             save_generated_resume(current_user.id, job_title, result["resume_tweaks"])
 
+        analysis_payload = {
+            "jd_summary": result.get("jd_summary", ""),
+            "resume_tweaks": result.get("resume_tweaks", ""),
+            "cover_letter": result.get("cover_letter", ""),
+            "company_profile": result.get("company_profile", ""),
+            "interview_prep": result.get("interview_prep", ""),
+            "hiring_score": result.get("hiring_score", 50),
+            "hiring_score_reasoning": result.get("hiring_score_reasoning", ""),
+        }
+
         # Save as conversation messages
         assistant_msg = Message(
             conversation_id=conversation_id,
             role="assistant",
-            content=json.dumps({
-                "jd_summary": result["jd_summary"],
-                "resume_tweaks": result["resume_tweaks"],
-                "cover_letter": result["cover_letter"],
-                "company_profile": result["company_profile"],
-                "interview_prep": result["interview_prep"],
-                "hiring_score": result["hiring_score"],
-                "hiring_score_reasoning": result["hiring_score_reasoning"],
-            }),
+            content=json.dumps(analysis_payload),
             metadata_={
                 "type": "job_analysis",
                 "job_title": job_title,
@@ -168,11 +189,20 @@ def run_crewai_analysis_task(user_id: str, conversation_id: str, job_data: dict,
         )
         db.add(assistant_msg)
         
+        # Track exact tokens generated across all agents directly from Gemini API
+        total_tokens = result.get("total_tokens", 0)
+        if total_tokens > 0:
+            add_tokens_sync(user_id, generative_tokens=total_tokens)
+
         import datetime
         convo.updated_at = datetime.datetime.now(datetime.timezone.utc)
         db.commit()
         
-        return {"status": "success", "job_title": job_title}
+        return {
+            "status": "success",
+            "job_title": job_title,
+            "analysis": analysis_payload,
+        }
     except Exception as e:
         logger.error(f"CrewAI analysis failed: {e}")
         return {"error": str(e)}

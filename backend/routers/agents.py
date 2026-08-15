@@ -155,9 +155,12 @@ async def chat_followup(
             content=reply_text,
             metadata_={"type": "followup_answer"}
         )
-        db.add(user_msg)
-        db.add(assistant_msg)
-        
+        # Track tokens directly from Gemini API response
+        from backend.services.token_service import extract_gemini_generation_tokens, add_tokens_async
+        token_count = extract_gemini_generation_tokens(response)
+        if token_count > 0:
+            await add_tokens_async(current_user.id, generative_tokens=token_count)
+
         convo.updated_at = datetime.now(timezone.utc)
         await db.commit()
         

@@ -23,19 +23,29 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onA
 
   // Check for existing analysis
   useEffect(() => {
+    const targetTitle = (job.position_title || job.title || '').trim().toLowerCase();
     const existingMsg = messages
       .slice()
       .reverse()
-      .find(
-        m => m.metadata_?.type === 'job_analysis' && 
-             m.metadata_?.job_title === job.position_title
-      );
+      .find(m => {
+        if (m.metadata_?.type !== 'job_analysis') return false;
+        const msgTitle = (m.metadata_?.job_title || '').trim().toLowerCase();
+        return (
+          msgTitle === targetTitle ||
+          (targetTitle && msgTitle.includes(targetTitle)) ||
+          (msgTitle && targetTitle.includes(msgTitle)) ||
+          msgTitle === 'unknown'
+        );
+      });
     
     if (existingMsg && existingMsg.content) {
       try {
-        const parsed = JSON.parse(existingMsg.content);
+        const parsed = typeof existingMsg.content === 'string'
+          ? JSON.parse(existingMsg.content)
+          : existingMsg.content;
         setAnalysis(parsed);
         setActiveTab('resume');
+        setLoading(false);
       } catch (err) {
         console.error("Failed to parse cached analysis", err);
       }
@@ -46,7 +56,11 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onA
   const pollTaskStatus = (taskId, onSuccess, onError) => {
     client.get(`/tasks/${taskId}`).then((res) => {
       if (res.data.state === 'SUCCESS') {
-        onSuccess();
+        if (res.data.result?.error) {
+          onError(new Error(res.data.result.error));
+        } else {
+          onSuccess(res.data.result);
+        }
       } else if (res.data.state === 'FAILURE') {
         onError(new Error(res.data.error || 'Task failed'));
       } else {
@@ -60,15 +74,28 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onA
     setError(null);
     try {
       const res = await client.post(`/conversations/${conversationId}/analyze-job`, {
-        job_data: job.raw_data || job,
+        job_data: {
+          position_title: job.position_title || job.title,
+          organization_name: job.organization_name || job.company,
+          location: job.location,
+          job_summary: job.job_summary || job.description,
+          url: job.url,
+          hiring_score: job.hiring_score,
+          hiring_score_reasoning: job.hiring_score_reasoning,
+          ...(job.raw_data || {}),
+        },
         user_bio: 'I am a professional looking for new opportunities.',
       });
       
       if (res.data.task_id) {
         pollTaskStatus(
           res.data.task_id,
-          () => {
-            // Task is completed, we need to fetch the conversation to get the latest messages
+          (taskResult) => {
+            if (taskResult?.analysis) {
+              setAnalysis(taskResult.analysis);
+              setActiveTab('resume');
+            }
+            setLoading(false);
             if (onAnalysisComplete) {
               onAnalysisComplete();
             }
@@ -79,12 +106,13 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onA
           }
         );
       } else {
-        setAnalysis(res.data);
+        const analysisData = res.data.analysis || res.data;
+        setAnalysis(analysisData);
         setActiveTab('resume');
         setLoading(false);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Analysis failed');
+      setError(err.response?.data?.detail || err.message || 'Analysis failed');
       setLoading(false);
     }
   };
@@ -102,15 +130,18 @@ export default function JobDetailPanel({ job, conversationId, messages = [], onA
       const res = await client.post(`/conversations/${conversationId}/chat`, {
         message: userMsg,
         job_context: {
-          position_title: job.position_title,
-          organization_name: job.organization_name,
+          position_title: job.position_title || job.title,
+          organization_name: job.organization_name || job.company,
           job_summary: analysis?.jd_summary || job.job_summary || 'Unknown',
         }
       });
       setChatHistory(prev => [...prev, { role: 'assistant', content: res.data.reply }]);
+      if (onAnalysisComplete) {
+        onAnalysisComplete();
+      }
     } catch (err) {
       console.error(err);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: "Sorry, I couldn't answer that right now." }]);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: err.response?.data?.detail || "Sorry, I couldn't answer that right now." }]);
     } finally {
       setChatLoading(false);
     }

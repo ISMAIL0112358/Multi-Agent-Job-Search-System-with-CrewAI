@@ -33,7 +33,9 @@ async def lifespan(app: FastAPI):
             ("screenings_count", 0),
             ("max_conversations", 10),
             ("conversations_count", 0),
-            ("max_messages_per_conversation", 50)
+            ("max_messages_per_conversation", 50),
+            ("generative_tokens_count", 0),
+            ("embedding_tokens_count", 0)
         ]:
             try:
                 await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} INTEGER DEFAULT {default_val} NOT NULL;"))

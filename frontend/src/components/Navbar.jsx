@@ -25,39 +25,49 @@ export default function Navbar() {
       </div>
 
       {user && (
-        <div className="navbar-user">
-          <div className="navbar-user-info">
-            <span className="navbar-user-name">{user.name}</span>
-            <span className="navbar-user-email">{user.email}</span>
+        <div className="navbar-right">
+          {/* Cumulative Token Metrics */}
+          <div className="navbar-token-metrics glass">
+            <div className="token-metric-badge generative" title="Cumulative Generative LLM Tokens Used">
+              <span className="token-metric-icon">🤖</span>
+              <span className="token-metric-label">Generative LLM:</span>
+              <span className="token-metric-value">{(user.generative_tokens_count || 0).toLocaleString()}</span>
+            </div>
+            <div className="token-metric-divider" />
+            <div className="token-metric-badge embedding" title="Cumulative Embedding Tokens Used">
+              <span className="token-metric-icon">🧬</span>
+              <span className="token-metric-label">Embedding:</span>
+              <span className="token-metric-value">{(user.embedding_tokens_count || 0).toLocaleString()}</span>
+            </div>
           </div>
-          {user.picture_url && (
-            <img
-              src={user.picture_url}
-              alt={user.name}
-              className="navbar-avatar"
-              referrerPolicy="no-referrer"
-            />
-          )}
-          {user.role === 'hr' && (
-            <>
-              <button className="btn btn-ghost" onClick={() => navigate('/')} id="nav-home-btn">
-                Home
+
+          <div className="navbar-user">
+            <div className="navbar-user-info">
+              <span className="navbar-user-name">{user.name}</span>
+              <span className="navbar-user-email">{user.email}</span>
+            </div>
+            {user.picture_url && (
+              <img
+                src={user.picture_url}
+                alt={user.name}
+                className="navbar-avatar"
+                referrerPolicy="no-referrer"
+              />
+            )}
+            {/* Show Profile button only for Job Seekers (not HR) */}
+            {user.role !== 'hr' && (
+              <button className="btn btn-secondary navbar-profile-btn" onClick={() => navigate('/profile')}>
+                Profile
               </button>
-              <button className="btn btn-secondary" onClick={() => navigate('/hr')} id="nav-hr-btn">
-                🎯 HR Dashboard
-              </button>
-            </>
-          )}
-          <button className="btn btn-secondary navbar-profile-btn" onClick={() => navigate('/profile')}>
-            Profile
-          </button>
-          <button className="btn btn-ghost navbar-logout" onClick={logout} id="logout-button">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-          </button>
+            )}
+            <button className="btn btn-ghost navbar-logout" onClick={logout} id="logout-button" title="Sign out">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>
+          </div>
         </div>
       )}
     </nav>

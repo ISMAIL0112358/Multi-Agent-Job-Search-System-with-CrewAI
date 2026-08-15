@@ -28,5 +28,9 @@ class User(Base):
     conversations_count = Column(Integer, default=0, nullable=False)
     max_messages_per_conversation = Column(Integer, default=50, nullable=False)
 
+    # Cumulative Token Tracking
+    generative_tokens_count = Column(Integer, default=0, nullable=False)
+    embedding_tokens_count = Column(Integer, default=0, nullable=False)
+
     def __repr__(self):
         return f"<User {self.email}>"

@@ -25,8 +25,12 @@ export default function ProfilePage() {
   const [resumeError, setResumeError] = useState(null);
 
   useEffect(() => {
+    if (user?.role === 'hr') {
+      navigate('/hr', { replace: true });
+      return;
+    }
     fetchResumes();
-  }, []);
+  }, [user, navigate]);
 
   const fetchResumes = async () => {
     setLoadingResumes(true);

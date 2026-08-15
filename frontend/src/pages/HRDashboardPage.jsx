@@ -10,7 +10,7 @@ import client from '../api/client';
 import './HRDashboardPage.css';
 
 export default function HRDashboardPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState('candidates');
   const [stats, setStats] = useState({ total_candidates: 0, open_positions: 0, shortlisted: 0, hired: 0 });
 
@@ -30,6 +30,7 @@ export default function HRDashboardPage() {
   const [selectedJdId, setSelectedJdId] = useState(null);
   const [screeningResults, setScreeningResults] = useState([]);
   const [screeningLoading, setScreeningLoading] = useState(false);
+  const [screeningDuration, setScreeningDuration] = useState(null);
   const [topN, setTopN] = useState(10);
   const [vettingLoading, setVettingLoading] = useState({});
 
@@ -105,6 +106,7 @@ export default function HRDashboardPage() {
           (result) => {
             fetchCandidates();
             fetchStats();
+            refreshUser();
             setUploading(false);
           },
           (error) => {
@@ -116,6 +118,7 @@ export default function HRDashboardPage() {
       } else {
         fetchCandidates();
         fetchStats();
+        refreshUser();
         setUploading(false);
       }
     } catch (err) {
@@ -164,6 +167,7 @@ export default function HRDashboardPage() {
       await client.post('/hr/job-descriptions', data);
       fetchJDs();
       fetchStats();
+      refreshUser();
     } catch (err) {
       console.error('JD creation failed:', err);
       alert(err.response?.data?.detail || 'Failed to create JD');
@@ -203,6 +207,7 @@ export default function HRDashboardPage() {
     setSelectedJdId(jdId);
     setScreeningLoading(true);
     setActiveTab('screening');
+    const startTime = Date.now();
     try {
       const res = await client.post('/hr/screen', {
         job_description_id: jdId,
@@ -213,7 +218,11 @@ export default function HRDashboardPage() {
         pollTaskStatus(
           res.data.task_id,
           (result) => {
+            const elapsed = result?.duration_seconds || ((Date.now() - startTime) / 1000).toFixed(2);
+            setScreeningDuration(elapsed);
             handleLoadResults(jdId);
+            fetchStats();
+            refreshUser();
             setScreeningLoading(false);
           },
           (error) => {
@@ -223,7 +232,11 @@ export default function HRDashboardPage() {
           }
         );
       } else {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+        setScreeningDuration(elapsed);
         setScreeningResults(res.data);
+        fetchStats();
+        refreshUser();
         setScreeningLoading(false);
       }
     } catch (err) {
@@ -262,6 +275,7 @@ export default function HRDashboardPage() {
             : r
         )
       );
+      refreshUser();
     } catch (err) {
       console.error('Vetting generation failed:', err);
     } finally {
@@ -668,11 +682,29 @@ export default function HRDashboardPage() {
             ) : (
               <div className="screening-results-list">
                 {selectedJd && (
-                  <div className="screening-results__header">
-                    <h2>Results for: {selectedJd.title}</h2>
-                    <span className="screening-results__count">
-                      {screeningResults.length} candidate{screeningResults.length !== 1 ? 's' : ''} matched
-                    </span>
+                  <div className="screening-results__header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                    <div>
+                      <h2 style={{ margin: 0 }}>Results for: {selectedJd.title}</h2>
+                      <span className="screening-results__count">
+                        {screeningResults.length} candidate{screeningResults.length !== 1 ? 's' : ''} matched
+                      </span>
+                    </div>
+                    {screeningDuration && (
+                      <span className="screening-time-badge glass" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        fontSize: '0.82rem',
+                        fontWeight: '600',
+                        color: '#34d399',
+                        background: 'rgba(52, 211, 153, 0.1)',
+                        border: '1px solid rgba(52, 211, 153, 0.25)'
+                      }}>
+                        ⚡ AI Screening completed in {screeningDuration}s
+                      </span>
+                    )}
                   </div>
                 )}
                 {screeningResults.map((result) => (
