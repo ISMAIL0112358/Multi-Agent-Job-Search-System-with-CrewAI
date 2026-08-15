@@ -21,7 +21,13 @@ export default function Sidebar({ activeId, onSelect, onNew }) {
 
   useEffect(() => {
     fetchConversations();
-  }, [activeId]);
+  }, []);
+
+  useEffect(() => {
+    if (activeId && conversations.length > 0 && !conversations.some(c => c.id === activeId)) {
+      fetchConversations();
+    }
+  }, [activeId, conversations]);
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();

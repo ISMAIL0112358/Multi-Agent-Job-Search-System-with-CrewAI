@@ -290,14 +290,14 @@ Generate 5 targeted verification questions. Respond with JSON only."""
         """Extract basic contact information from a resume and return dict including exact tokens."""
         system_prompt = """Extract the candidate's basic contact information from the resume.
 
-You MUST respond with valid JSON in exactly this format:
-{
-  "name": "<full name>",
-  "email": "<email address or empty string if not found>",
-  "phone": "<phone number or empty string if not found>"
-}
+                            You MUST respond with valid JSON in exactly this format:
+                            {
+                            "name": "<full name>",
+                            "email": "<email address or empty string if not found>",
+                            "phone": "<phone number or empty string if not found>"
+                            }
 
-Respond with JSON only. Do not add any extra text."""
+                            Respond with JSON only. Do not add any extra text."""
 
         response = self._llm.invoke([
             SystemMessage(content=system_prompt),

@@ -37,6 +37,8 @@ def process_bulk_resumes_task(user_id: str, files_data: list[Dict[str, Any]]):
             return {"error": "User not found"}
 
         vector_service = VectorService.get_instance()
+
+        # here screening service is used to just extract user details during resume upload
         screening_service = ScreeningService(vector_service)
 
         processed_count = 0
