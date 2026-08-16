@@ -21,6 +21,7 @@ async def _score_single_job(parsed: dict, resume_text: str, user_skills: str | N
     """Score a single parsed job item concurrently in a non-blocking thread."""
     tokens = 0
     try:
+        # TODO: run_hiring_score is sync func because we used crew kickoff which is sync and to protect event loop getting blocked we use this workaround
         score_result = await asyncio.to_thread(
             run_hiring_score,
             parsed["job_summary"],
@@ -74,6 +75,7 @@ async def search_jobs(
     # Parse and score each job concurrently if results exist
     results = []
     if raw_jobs:
+        # TODO: Instead of scoring sequentially we can do it in parallel
         score_tasks = [
             _score_single_job(
                 parse_job_item(item),

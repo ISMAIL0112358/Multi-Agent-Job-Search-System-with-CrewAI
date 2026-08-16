@@ -1,4 +1,8 @@
+import logging
 from crewai import Crew, Process
+
+logger = logging.getLogger(__name__)
+
 from backend.agents.jd_analyst import get_jd_analyst_agent, create_jd_analysis_task
 from backend.agents.resume_cl_agent import get_resume_cl_agent, create_resume_cl_task
 from backend.agents.messaging_agent import get_messaging_agent, create_messaging_task
