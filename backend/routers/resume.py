@@ -12,7 +12,7 @@ from backend.deps import get_current_user
 from backend.models.user import User
 from backend.models.conversation import Conversation, Message
 from backend.services.pdf_service import extract_text_from_pdf
-from backend.services.storage_service import save_resume, get_user_documents
+from backend.services.storage_service import save_resume, get_user_documents, read_user_resume, delete_user_resume
 
 router = APIRouter(prefix="/conversations", tags=["Resume"])
 user_resumes_router = APIRouter(prefix="/user-resumes", tags=["User Resumes"])
@@ -32,13 +32,10 @@ async def list_user_resumes(current_user: User = Depends(get_current_user)):
 @user_resumes_router.delete("/{filename}")
 async def delete_resume(filename: str, current_user: User = Depends(get_current_user)):
     """Delete a previously uploaded resume by filename."""
-    filepath = os.path.join(settings.DATA_DIR, "users", current_user.id, "resumes", filename)
-    
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
-        
     try:
-        os.remove(filepath)
+        delete_user_resume(current_user.id, filename)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete resume: {str(e)}")
         
@@ -161,14 +158,11 @@ async def select_resume(
     if not convo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
-    filepath = os.path.join(settings.DATA_DIR, "users", current_user.id, "resumes", body.filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
-
     try:
-        with open(filepath, "rb") as f:
-            file_bytes = f.read()
+        file_bytes = read_user_resume(current_user.id, body.filename)
         resume_text = extract_text_from_pdf(file_bytes)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to read resume: {str(e)}")
 

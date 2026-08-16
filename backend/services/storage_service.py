@@ -79,10 +79,75 @@ def save_generated_resume(user_id: str, job_title: str, content: str) -> str:
     return filepath
 
 
+def read_user_resume(user_id: str, filename: str) -> bytes:
+    """Read a user's resume PDF bytes from S3 or local disk storage."""
+    safe_name = re.sub(r'[\\/*?:"<>|]', "_", filename)
+
+    if settings.STORAGE_PROVIDER == "s3":
+        try:
+            s3 = _get_s3_client()
+            s3_key = f"users/{user_id}/resumes/{safe_name}"
+            res = s3.get_object(Bucket=settings.S3_BUCKET_NAME, Key=s3_key)
+            return res["Body"].read()
+        except Exception as e:
+            logger.error(f"Failed to read user resume from S3 ({safe_name}): {e}")
+            raise FileNotFoundError(f"Resume {filename} not found on S3")
+
+    directory = _get_user_dir(user_id, "resumes")
+    filepath = os.path.join(directory, safe_name)
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Resume {filename} not found on disk")
+    with open(filepath, "rb") as f:
+        return f.read()
+
+
+def delete_user_resume(user_id: str, filename: str):
+    """Delete a user's resume PDF from S3 or local disk storage."""
+    safe_name = re.sub(r'[\\/*?:"<>|]', "_", filename)
+
+    if settings.STORAGE_PROVIDER == "s3":
+        try:
+            s3 = _get_s3_client()
+            s3_key = f"users/{user_id}/resumes/{safe_name}"
+            s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=s3_key)
+            return
+        except Exception as e:
+            logger.error(f"Failed to delete user resume from S3 ({safe_name}): {e}")
+            raise
+
+    directory = _get_user_dir(user_id, "resumes")
+    filepath = os.path.join(directory, safe_name)
+    if os.path.exists(filepath):
+        os.remove(filepath)
+
+
 def get_user_documents(user_id: str, doc_type: str) -> list:
-    """List all documents for a user of a given type (resumes or cover_letters)."""
+    """List all documents for a user of a given type (resumes or cover_letters) from S3 or local disk."""
+    if settings.STORAGE_PROVIDER == "s3":
+        try:
+            s3 = _get_s3_client()
+            prefix = f"users/{user_id}/{doc_type}/"
+            res = s3.list_objects_v2(Bucket=settings.S3_BUCKET_NAME, Prefix=prefix)
+            files = []
+            for obj in res.get("Contents", []):
+                key = obj["Key"]
+                filename = key.replace(prefix, "")
+                if filename:
+                    files.append({
+                        "filename": filename,
+                        "filepath": key,
+                        "size": obj["Size"],
+                        "modified": obj["LastModified"].isoformat(),
+                    })
+            return sorted(files, key=lambda x: x["modified"], reverse=True)
+        except Exception as e:
+            logger.error(f"Failed to list S3 user documents: {e}")
+            return []
+
     directory = _get_user_dir(user_id, doc_type)
     files = []
+    if not os.path.exists(directory):
+        return []
     for fname in sorted(os.listdir(directory), reverse=True):
         fpath = os.path.join(directory, fname)
         if os.path.isfile(fpath):

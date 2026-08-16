@@ -12,9 +12,11 @@ export default function ChatWindow({ conversationId }) {
   const { refreshUser } = useAuth();
   const [conversation, setConversation] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [keyword, setKeyword] = useState('');
+  const [keywords, setKeywords] = useState([]);
+  const [keywordInput, setKeywordInput] = useState('');
   const [location, setLocation] = useState('');
-  const [companyPreference, setCompanyPreference] = useState('');
+  const [companyPreferences, setCompanyPreferences] = useState([]);
+  const [companyPrefInput, setCompanyPrefInput] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchDuration, setSearchDuration] = useState(null);
   const [jobs, setJobs] = useState([]);
@@ -29,6 +31,30 @@ export default function ChatWindow({ conversationId }) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation?.messages]);
+
+  const handleAddKeywordTag = (val) => {
+    const trimmed = val.replace(/,/g, '').trim();
+    if (trimmed && !keywords.includes(trimmed)) {
+      setKeywords(prev => [...prev, trimmed]);
+    }
+    setKeywordInput('');
+  };
+
+  const handleRemoveKeywordTag = (tagToRemove) => {
+    setKeywords(prev => prev.filter(t => t !== tagToRemove));
+  };
+
+  const handleAddCompanyPrefTag = (val) => {
+    const trimmed = val.replace(/,/g, '').trim();
+    if (trimmed && !companyPreferences.includes(trimmed)) {
+      setCompanyPreferences(prev => [...prev, trimmed]);
+    }
+    setCompanyPrefInput('');
+  };
+
+  const handleRemoveCompanyPrefTag = (tagToRemove) => {
+    setCompanyPreferences(prev => prev.filter(t => t !== tagToRemove));
+  };
 
   const fetchConversation = async () => {
     setLoading(true);
@@ -62,16 +88,27 @@ export default function ChatWindow({ conversationId }) {
 
   const handleSearchJobs = async (e) => {
     e.preventDefault();
-    if (!keyword.trim()) return;
+    const finalKeywords = [...keywords];
+    if (keywordInput.replace(/,/g, '').trim()) {
+      const extra = keywordInput.replace(/,/g, '').trim();
+      if (!finalKeywords.includes(extra)) finalKeywords.push(extra);
+    }
+    if (finalKeywords.length === 0) return;
+
+    const finalPrefs = [...companyPreferences];
+    if (companyPrefInput.replace(/,/g, '').trim()) {
+      const extraPref = companyPrefInput.replace(/,/g, '').trim();
+      if (!finalPrefs.includes(extraPref)) finalPrefs.push(extraPref);
+    }
 
     setSearching(true);
     setJobs([]);
     const startTime = Date.now();
     try {
       const res = await client.post(`/conversations/${conversationId}/search-jobs`, {
-        keyword: keyword.trim(),
+        keyword: finalKeywords,
         location: location.trim() || 'remote',
-        company_preference: companyPreference.trim() || undefined,
+        company_preference: finalPrefs.length > 0 ? finalPrefs : undefined,
         results_per_page: 5,
       });
       const elapsed = res.data.search_time_seconds || ((Date.now() - startTime) / 1000).toFixed(2);
@@ -110,6 +147,7 @@ export default function ChatWindow({ conversationId }) {
   }
 
   const hasResume = !!conversation?.resume_filename;
+  const isSearchDisabled = searching || (keywords.length === 0 && !keywordInput.trim());
 
   return (
     <div className="chat-window" id="chat-window">
@@ -155,39 +193,108 @@ export default function ChatWindow({ conversationId }) {
           <div className="chat-section-header">
             <span className="chat-step-badge">Step 2</span>
             <h3>Search for Jobs</h3>
-            <p>Find positions matching your skills and get hiring scores.</p>
+            <p>Type keywords and company preferences (press Enter or comma to create tag pills).</p>
           </div>
-          <form className="chat-search-form" onSubmit={handleSearchJobs}>
+          <form className="chat-search-form" onSubmit={e => e.preventDefault()}>
             <div className="chat-search-inputs">
+              {/* Keywords Tag Input */}
+              <div className="tag-input-wrapper">
+                {keywords.map((tag, idx) => (
+                  <span key={idx} className="tag-pill animate-fade-in">
+                    {tag}
+                    <button
+                      type="button"
+                      className="tag-pill-remove"
+                      onClick={() => handleRemoveKeywordTag(tag)}
+                      title="Remove keyword"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  className="tag-input-field"
+                  placeholder={keywords.length === 0 ? "Job keywords (e.g. Data Analyst, Python)" : "Add keyword..."}
+                  value={keywordInput}
+                  onChange={e => {
+                    if (e.target.value.includes(',')) {
+                      handleAddKeywordTag(e.target.value);
+                    } else {
+                      setKeywordInput(e.target.value);
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      handleAddKeywordTag(keywordInput);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (keywordInput.trim()) handleAddKeywordTag(keywordInput);
+                  }}
+                  id="job-keyword-input"
+                />
+              </div>
+
+              {/* Location Input */}
               <input
                 type="text"
                 className="input"
-                placeholder="Job keyword (e.g. data analyst)"
-                value={keyword}
-                onChange={e => setKeyword(e.target.value)}
-                id="job-keyword-input"
-              />
-              <input
-                type="text"
-                className="input"
-                placeholder="Location (e.g. New York)"
+                placeholder="Location (e.g. New York, Remote)"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') e.preventDefault();
+                }}
                 id="job-location-input"
               />
-              <input
-                type="text"
-                className="input"
-                placeholder="Ideal Company (e.g. startup, remote, fintech)"
-                value={companyPreference}
-                onChange={e => setCompanyPreference(e.target.value)}
-                id="company-preference-input"
-              />
+
+              {/* Company Preference Tag Input */}
+              <div className="tag-input-wrapper" style={{ gridColumn: 'span 2' }}>
+                {companyPreferences.map((tag, idx) => (
+                  <span key={idx} className="tag-pill tag-pill-alt animate-fade-in">
+                    {tag}
+                    <button
+                      type="button"
+                      className="tag-pill-remove"
+                      onClick={() => handleRemoveCompanyPrefTag(tag)}
+                      title="Remove preference"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  className="tag-input-field"
+                  placeholder={companyPreferences.length === 0 ? "Ideal Company Preferences (e.g. Startup, Fintech, Remote)" : "Add preference..."}
+                  value={companyPrefInput}
+                  onChange={e => {
+                    if (e.target.value.includes(',')) {
+                      handleAddCompanyPrefTag(e.target.value);
+                    } else {
+                      setCompanyPrefInput(e.target.value);
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      handleAddCompanyPrefTag(companyPrefInput);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (companyPrefInput.trim()) handleAddCompanyPrefTag(companyPrefInput);
+                  }}
+                  id="company-preference-input"
+                />
+              </div>
             </div>
             <button
-              type="submit"
+              type="button"
+              onClick={handleSearchJobs}
               className="btn btn-primary"
-              disabled={searching || !keyword.trim()}
+              disabled={isSearchDisabled}
               id="search-jobs-button"
             >
               {searching ? (

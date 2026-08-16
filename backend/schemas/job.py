@@ -1,13 +1,31 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Union
 
 
 class JobSearchRequest(BaseModel):
     """Request body for searching jobs."""
-    keyword: str
+    keyword: Union[str, List[str]]
     location: str = "remote"
-    company_preference: Optional[str] = None
+    company_preference: Optional[Union[str, List[str]]] = None
     results_per_page: int = 5
+
+    @property
+    def keyword_list(self) -> List[str]:
+        if isinstance(self.keyword, list):
+            return [k.strip() for k in self.keyword if k and k.strip()]
+        if isinstance(self.keyword, str):
+            return [k.strip() for k in self.keyword.split(",") if k and k.strip()]
+        return []
+
+    @property
+    def company_preference_list(self) -> List[str]:
+        if not self.company_preference:
+            return []
+        if isinstance(self.company_preference, list):
+            return [c.strip() for c in self.company_preference if c and c.strip()]
+        if isinstance(self.company_preference, str):
+            return [c.strip() for c in self.company_preference.split(",") if c and c.strip()]
+        return []
 
 
 class JobResult(BaseModel):

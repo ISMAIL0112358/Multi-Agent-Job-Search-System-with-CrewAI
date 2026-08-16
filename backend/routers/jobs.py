@@ -65,8 +65,11 @@ async def search_jobs(
             detail="Please upload a resume first before searching for jobs.",
         )
 
-    # Fetch jobs from LinkedIn asynchronously
-    raw_jobs = await fetch_linkedin_jobs(body.keyword, body.location, body.results_per_page)
+    # Fetch jobs from LinkedIn asynchronously using keyword list
+    keywords_input = body.keyword_list if body.keyword_list else body.keyword
+    company_pref_str = ", ".join(body.company_preference_list) if body.company_preference_list else (body.company_preference if isinstance(body.company_preference, str) else None)
+
+    raw_jobs = await fetch_linkedin_jobs(keywords_input, body.location, body.results_per_page)
 
     # Parse and score each job concurrently if results exist
     results = []
@@ -76,7 +79,7 @@ async def search_jobs(
                 parse_job_item(item),
                 convo.resume_text,
                 current_user.skills,
-                body.company_preference,
+                company_pref_str,
             )
             for item in raw_jobs
         ]
